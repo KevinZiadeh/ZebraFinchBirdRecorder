@@ -47,13 +47,11 @@ double* test_filter(double* raw_signal, long size){
 }
 
 void compare_matlab(vector<double> vectored_signal, double* filtered_signal, int size){
-
     vector<double> matlab_filtered_signal = read_csv("matlab_firfiltered.csv", 0);
-    double precision = 0.0000000001;
+    double precision = 0.00000005;
     for (int i =0;i<size;i++){
         cout << "Volt: " << vectored_signal[i] << " - C++ FIR: " << filtered_signal[i] 
         << " - MATLAB FIR: " << matlab_filtered_signal[i] << " - Equal? " 
         << (abs(filtered_signal[i]-matlab_filtered_signal[i]<precision) ? "True" : "False") << endl;
     }
-
 }
