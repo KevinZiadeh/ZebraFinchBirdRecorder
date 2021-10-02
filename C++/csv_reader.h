@@ -2,4 +2,4 @@
 #include <string>
 using namespace std;
 
-vector<float> read_csv(string filename);
+vector<double> read_csv(string filename, int col);

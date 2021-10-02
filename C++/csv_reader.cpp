@@ -9,7 +9,9 @@
 #include <windows.h>
 using namespace std;
 
-vector<float> read_csv(string filename){
+#define print_vec(vec) for(auto e: vec) {cout << e << " ";} cout << endl;
+
+vector<double> read_csv(string filename, int col){
     // Create an input filestream
     ifstream myFile(filename);
 
@@ -20,17 +22,20 @@ vector<float> read_csv(string filename){
     string line;
 
     // Read data, line by line
-    bool col = false;
-    vector<float> result;
-    while(getline(myFile, line, ','))
-    {
-        if (col){
-            result.push_back(stof(line));
+    vector<double> result;
+    int index;
+        while(getline(myFile, line))
+        {
+            index = 0;
+            stringstream ss(line);
+            while(getline(ss, line, ',')){
+                if (index == col){
+                    result.push_back(stof(line));
+                }   
+                index++; 
+            }
         }
-        col = !col;
-    }
     // Close file
     myFile.close();
-
     return result;
 }
