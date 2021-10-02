@@ -2,5 +2,5 @@
 #include <windows.h>
 
 uint16_t* filter_signal(uint16_t* raw_signal, int size);
-float* filter_signal(float* raw_signal, int size);
-// std::vector<float> analyze_signal();
+double* filter_signal(double* raw_signal, int size);
+// std::vector<double> analyze_signal();
