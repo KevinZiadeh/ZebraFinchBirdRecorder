@@ -99,9 +99,11 @@ void ADCReader(double* raw_signal,  double* audioBuffer, int buffer1_head,
         }
         iter++;
         iter = iter%(BUFFER_SIZE+1);
+        if (i == 100) break;
         this_thread::sleep_for(0.0005s);    
     }
-    compare_matlab(sd_card, 262144);
+    print_point(sd_card, 50);
+    // compare_matlab(sd_card, 262144);
 }
 
 double* Filter(double* buffer, int head, int size)
