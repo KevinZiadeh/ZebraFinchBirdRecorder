@@ -11,7 +11,7 @@ using namespace std;
 // INPUT:   pointer to the raw signal
 //          size of the raw signal
 // OUTPUT:  pointer to the filtered signal
-uint16_t* filter_signal(uint16_t* raw_signal, int size){
+uint16_t* filter_signal(uint16_t* raw_signal, int size, uint16_t* prev1, uint16_t* prev2){
 // coefficients used for the filtering. Online
     double a0 = 0.8948577513857248;
     double a1 = -1.7897155027714495;
@@ -32,8 +32,7 @@ uint16_t* filter_signal(uint16_t* raw_signal, int size){
     return filtered_signal;
 }
 
-double* filter_signal(double* raw_signal, int size){
-    
+double* filter_signal(double* raw_signal, int size, double prev1, double prev2){    
 // coefficients used for the filtering. Online
     double a0 = 0.8948577513857248;
     double a1 = -1.7897155027714495;
@@ -44,8 +43,8 @@ double* filter_signal(double* raw_signal, int size){
 // new filtered signal
     double* filtered_signal = (double*)malloc(sizeof(double)*size);
     // Initial values set to 0
-    filtered_signal[0] = (double)0;
-    filtered_signal[0] = (double)0;
+    filtered_signal[0] = prev1;
+    filtered_signal[1] = prev2;
 
    for (int i=2; i<size; i++){
         filtered_signal[i] = a0*raw_signal[i] + a1*raw_signal[i-1] + a2*raw_signal[i-2] - b1*filtered_signal[i-1] - b2*filtered_signal[i-2];

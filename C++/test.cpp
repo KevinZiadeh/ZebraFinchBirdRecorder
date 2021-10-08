@@ -6,14 +6,18 @@
 #include <chrono>
 #include <thread>
 #include <future>         // std::async, std::future
+#include <iomanip>      // std::setprecision
 
 using namespace std;
 
 #define print_vec(vec) for(auto e: vec) {cout << e << " ";} cout << endl;
-#define print_point(point, size) for(int i=0;i<min(size, 100);i++) {cout << point[i] << " ";} cout << endl;
-#define BUFFER_SIZE 15
+#define print_point(point, size) for(int i=0;i<min(size, 100);i++) {cout << setprecision(9) << point[i] << " ";} cout << endl;
+#define BUFFER_SIZE 64
 
 double* sd_card = (double *)malloc(sizeof(double)*262144);
+int sd_card_index = 0;
+double prev1 = 0;
+double prev2 = 0;
 
 double* test_filter(double* raw_signal, long size);
 void compare_matlab(double* filtered_signal, int size);
@@ -53,7 +57,7 @@ int main(){
 double* test_filter(double* raw_signal, long size){
     this_thread::sleep_for(1s);
     chrono::steady_clock::time_point begin = chrono::steady_clock::now();
-    double* filtered_signal = filter_signal(raw_signal, size);
+    double* filtered_signal = filter_signal(raw_signal, size, prev1, prev2);
     chrono::steady_clock::time_point end1 = chrono::steady_clock::now();
     cout << "Filtering function took " << chrono::duration_cast<chrono::microseconds>(end1 - begin).count() << "muS" << endl;
     return filtered_signal;
@@ -64,7 +68,7 @@ void compare_matlab(double* filtered_signal, int size){
     vector<double> matlab_filtered_signal = read_csv("matlab_firfiltered.csv", 0);
     double precision = 0.0000001;
     for (int i =0;i<min(size,1000);i++){
-        cout << " - C++ FIR: " << filtered_signal[i] 
+        cout << i << " - C++ FIR: " << filtered_signal[i] 
         << " - MATLAB FIR: " << matlab_filtered_signal[i] << " - Equal? " 
         << (abs(filtered_signal[i]-matlab_filtered_signal[i]<precision) ? "True" : "False") << endl;
     }
@@ -99,11 +103,11 @@ void ADCReader(double* raw_signal,  double* audioBuffer, int buffer1_head,
         }
         iter++;
         iter = iter%(BUFFER_SIZE+1);
-        if (i == 100) break;
+        if (i == 1000) break;
         this_thread::sleep_for(0.0005s);    
     }
-    print_point(sd_card, 50);
-    // compare_matlab(sd_card, 262144);
+    // print_point(sd_card, 35);
+    compare_matlab(sd_card, 262144);
 }
 
 double* Filter(double* buffer, int head, int size)
@@ -111,17 +115,23 @@ double* Filter(double* buffer, int head, int size)
     // cout << "Filter thread " << this_thread::get_id() << " with head " << head << endl;
     chrono::steady_clock::time_point begin = chrono::steady_clock::now();
     double* buffer_signal = (double *)malloc(sizeof(double)*size);
+    // print_point(buffer, BUFFER_SIZE);
     for (int i=0; i<size;i++){
         buffer_signal[i] = buffer[(head+i)%(BUFFER_SIZE+1)];
     }
-    double* filtered_signal = filter_signal(buffer_signal, size);
+    // cout << head << endl;
+    // print_point(buffer_signal, size);
+    double* filtered_signal = filter_signal(buffer_signal, size, prev1, prev2);
     chrono::steady_clock::time_point end1 = chrono::steady_clock::now();
     // cout << "Filtering function took " << chrono::duration_cast<chrono::microseconds>(end1 - begin).count() << "muS" << endl;
     // send to analysis
     // add to sd card
+    prev1 = filtered_signal[size-2];
+    prev2 = filtered_signal[size-1];
+
     for(int i=0;i<size;i++) {
-        sd_card[i] = filtered_signal[i];
+        sd_card[sd_card_index] = filtered_signal[i];
+        sd_card_index++;
     }
-    
     return filtered_signal;
 }
