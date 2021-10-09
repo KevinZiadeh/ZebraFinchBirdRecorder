@@ -3,7 +3,6 @@
 #include "noise_filter.h"
 #include "csv_reader.h"
 #include <string>
-#include <chrono>
 #include <thread>
 #include <future>         // std::async, std::future
 #include <iomanip>      // std::setprecision
@@ -15,7 +14,7 @@ using namespace std;
 #define print_point(point, size) for(int i=0;i<min(size, 100);i++) {cout << setprecision(9) << point[i] << " ";} cout << endl;
 
 // Complete buffer size (combination of buffer 1 + buffer 2) -> 0.8*BUFFER_SIZE == Buffer1 -> 1 second
-#define BUFFER_SIZE 512
+#define BUFFER_SIZE 5120
 
 // Headers of defined functions
 double* test_filter(double* dp_rawSignal, int i_size);
@@ -56,8 +55,6 @@ int main(){
     }
     int i_CompleteDataSize = vd_data.size(); // total number of testing data points
 
-    cout << endl << endl << "Main thread " << this_thread::get_id() << endl;
-    this_thread::sleep_for(2s);
     // launch thread that reads data asynchronously continuously 
     future<void> readerThread = async(launch::async, ADCReader, dp_rawSignal, dp_audioBuffer,  i_buffer1Head, 
                 i_buffer2Head, i_buffer1Tail, i_buffer2Tail, i_CompleteDataSize);
@@ -84,15 +81,15 @@ double* test_filter(double* dp_rawSignal, int i_size){
  * @brief compares the filtered array to the correct values extracted from MATLAB -> prints a comparision eleemnt by element
  * 
  * @param dp_filteredSignal array that contains the values to compare with MATLAB
- * @param i_size size of the array
+ * @param i_size size of comparision points -> shouldn't exceed max size
  */
 void compare_matlab(double* dp_filteredSignal, int i_size){
     vector<double> vd_matlabFilteredSignal = read_csv("matlab_firfiltered.csv", 0);
     double d_precision = 0.0000001;
-    for (int i =0;i<min(i_size,1000);i++){
+    for (int i =0;i<i_size;i++){
         cout << i << " - C++ FIR: " << dp_filteredSignal[i] 
         << " - MATLAB FIR: " << vd_matlabFilteredSignal[i] << " - Equal? " 
-        << (abs(dp_filteredSignal[i]-vd_matlabFilteredSignal[i]<d_precision) ? "True" : "False") << endl;
+        << (abs(dp_filteredSignal[i]-vd_matlabFilteredSignal[i])<d_precision ? "True" : "False") << endl;
     }
 }
 
@@ -101,12 +98,12 @@ void compare_matlab(double* dp_filteredSignal, int i_size){
  * 
  * @param dp_rawSignal array that indicates the complete raw signal for filtering 
  * @param dp_sdCard array that indicates the values saved in the SD card
- * @param i_CompleteDataSize size of the array
+ * @param i_size size of comparision points -> shouldn't exceed max size
  */
-void compare_buffer_nobuffer(double* dp_rawSignal, double* dp_sdCard, int i_CompleteDataSize){
-    double* dp_filteredSignal = test_filter(dp_rawSignal, i_CompleteDataSize);
+void compare_buffer_nobuffer(double* dp_rawSignal, double* dp_sdCard, int i_size){
+    double* dp_filteredSignal = test_filter(dp_rawSignal, i_size);
     double d_precision = 0.0000001;
-    for (int i =0;i<min(i_CompleteDataSize,1000);i++){
+    for (int i =400;i<i_size;i++){
         cout << i << " - C++ Complete: " << dp_filteredSignal[i] 
         << " - C++ Buffer: " << dp_sdCard[i] << " - Equal? " 
         << (abs(dp_filteredSignal[i]-dp_sdCard[i])<d_precision ? "True" : "False") << endl;
@@ -129,62 +126,51 @@ void ADCReader(double* dp_rawSignal,  double* dp_audioBuffer, int i_buffer1Head,
     int i_head = -1; // helper integer to specify head of buffer for filtering
     int i_iter = 0; // iterator for the index of the buffer
     const int i_singleBufferSize = 0.8*BUFFER_SIZE; // size of each buffer, whose combination and overlap is BUFFER_SIZE
-    cout << "ADC Reader thread " << this_thread::get_id() << endl;
     // Reads data sequentially from array containing all the data -> simulates reading from ADC
+    // We lose a maximum of 0.2*BUFFER_SIZE of data at the end
     for(int i = 0; i < i_CompleteDataSize; i++){
         dp_audioBuffer[i_iter] = dp_rawSignal[i];
         if (i_iter == i_buffer1Tail){ // when buffer 1 is full
-            // cout << "Buffer 1 full. Send to filtering" << endl;
             i_head = i_buffer1Head;
-            i_buffer1Head = ((int)(i_buffer1Head+0.4*BUFFER_SIZE)%BUFFER_SIZE); // changes head position on the first buffer to start saving 50% later 
+            i_buffer1Head = ((int)(i_buffer1Head+0.4*BUFFER_SIZE)%(BUFFER_SIZE+1)); // changes head position on the first buffer to start saving 50% later 
             i_buffer1Tail = ((int)(i_buffer1Tail+0.4*BUFFER_SIZE)%BUFFER_SIZE); // changes tail position on the first buffer to end 50% later
-            // launch thread that filters the buffer 
-            future<double*> filterThread = async(launch::deferred, Filter, dp_audioBuffer, i_head, i_singleBufferSize);
+            future<double*> filterThread = async(launch::deferred, Filter, dp_audioBuffer, i_head, i_singleBufferSize); // launch thread that filters the buffer 
             double* filteredBuffer = filterThread.get(); 
         }
         if (i_iter == i_buffer2Tail){ // when buffer 2 is full
-            // cout << "Buffer 2 full. Send to filtering" << endl;
             i_head = i_buffer2Head;
-            i_buffer2Head = ((int)(i_buffer2Head+0.4*BUFFER_SIZE)%BUFFER_SIZE); // changes head position on the second buffer to start saving 50% later
+            i_buffer2Head = ((int)(i_buffer2Head+0.4*BUFFER_SIZE)%(BUFFER_SIZE+1)); // changes head position on the second buffer to start saving 50% later
             i_buffer2Tail = ((int)(i_buffer2Tail+0.4*BUFFER_SIZE)%BUFFER_SIZE); // changes tail position on the second buffer to end 50% later
-            // launch thread that filters the buffer
-            future<double*> filterThread = async(launch::deferred, Filter, dp_audioBuffer, i_head, i_singleBufferSize);
+            future<double*> filterThread = async(launch::deferred, Filter, dp_audioBuffer, i_head, i_singleBufferSize); // launch thread that filters the buffer
             double* filteredBuffer = filterThread.get(); 
         }
         i_iter++;
         i_iter = i_iter%(BUFFER_SIZE+1);
         this_thread::sleep_for(0.0005s);    
     }
-    compare_buffer_nobuffer(dp_rawSignal, dp_sdCard, i_CompleteDataSize);
 }
 
 /**
  * @brief simulated the filtering, analysis and adding to the SD card
  * 
  * @param dp_buffer buffer that mimicks a circular queue to be filtered and analyzed
- * @param head beginning position to read from the buffer 
+ * @param i_head beginning position to read from the buffer 
  * @param i_singleBufferSize size of a single buffer - proportional to BUFFER_SIZE
  * @return double* to the filtered buffer 
  */
-double* Filter(double* dp_buffer, int head, int i_singleBufferSize){
-    // cout << "Filter thread " << this_thread::get_id() << " with head " << head << endl;
-    // chrono::steady_clock::time_point begin = chrono::steady_clock::now(); // mesure time filtering took
+double* Filter(double* dp_buffer, int i_head, int i_singleBufferSize){
     double* dp_bufferSignal = (double *)malloc(sizeof(double)*i_singleBufferSize); // buffer to be analyzed
     // populate correct values starting from specified and looping back as if circular queue 
     for (int i=0; i<i_singleBufferSize;i++){
-        dp_bufferSignal[i] = dp_buffer[(head+i)%(BUFFER_SIZE+1)]; // implements circular queue
+        dp_bufferSignal[i] = dp_buffer[(i_head+i)%(BUFFER_SIZE+1)]; // implements circular queue
     }
     double* dp_filteredSignal = filter_signal(dp_bufferSignal, i_singleBufferSize, d_filteredPrev1, d_filteredPrev2); // filtered signal
-    chrono::steady_clock::time_point end1 = chrono::steady_clock::now();
-    // cout << "Filtering function took " << chrono::duration_cast<chrono::microseconds>(end1 - begin).count() << "muS" << endl;
-    d_rawPrev1 = dp_buffer[i_singleBufferSize-2]; //???
-    d_rawPrev1 = dp_buffer[i_singleBufferSize-1]; //???
     d_filteredPrev1 = dp_filteredSignal[i_singleBufferSize-2];
     d_filteredPrev2 = dp_filteredSignal[i_singleBufferSize-1];
 
-// add to sd card will be done after setting merge buffer by analysis, 
-// but for testing purposes, we want to save the complete first buffer
-// then start appending
+    // add to sd card will be done after setting merge buffer by analysis, 
+    // but for testing purposes, we want to save the complete first buffer
+    // then start appending
     int i_startCopyIndex = (int)((b_mergeBuffer*0.6*BUFFER_SIZE+0.5));
     for(int i=i_startCopyIndex;i<i_singleBufferSize;i++) {
         dp_sdCard[i_sdCardIndex] = dp_filteredSignal[i];
