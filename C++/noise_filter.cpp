@@ -1,54 +1,45 @@
-// #include <vector>
 #include <stdint.h>
 #include <windows.h>
 #include <iostream>
 
 using namespace std;
 
-#define print_vec(vec) for(auto e: vec) {cout << e << " ";} cout << endl;
-
-// function to filter the noise out of the signal 
-// INPUT:   pointer to the raw signal
-//          size of the raw signal
-// OUTPUT:  pointer to the filtered signal
-uint16_t* filter_signal(uint16_t* raw_signal, int size, uint16_t* prev1, uint16_t* prev2){
-// coefficients used for the filtering. Online
+double* filter_signal(uint16_t* u16_bufferSignal, int i_singleBufferSize, double d_filteredPrev1, double d_filteredPrev2){
+    // coefficients used for the filtering. Online
     double a0 = 0.8948577513857248;
     double a1 = -1.7897155027714495;
     double a2 = 0.8948577513857248;
     double b1 = -1.7786300789392977;
     double b2 = 0.8008009266036016;
 
-// new filtered signal
-    uint16_t* filtered_signal = (uint16_t *)malloc(2*size);
+    double* dp_filteredSignal = (double *)malloc(sizeof(double)*i_singleBufferSize); // filtered buffer
     // Initial values set to 0
-    filtered_signal[0] = (uint16_t)0;
-    filtered_signal[0] = (uint16_t)0;
-
-   for (int i =2; i< size; i++){
-        filtered_signal[i] = a0*raw_signal[i] + a1*raw_signal[i-1] + a2*raw_signal[i-2] - b1*filtered_signal[i-1] - b2*filtered_signal[i-2];
+    dp_filteredSignal[0] = d_filteredPrev1;
+    dp_filteredSignal[0] = d_filteredPrev2;
+ 
+    for (int i =2; i< i_singleBufferSize; i++){
+        dp_filteredSignal[i] = (((a0*u16_bufferSignal[i] + a1*u16_bufferSignal[i-1] + a2*u16_bufferSignal[i-2])*3.3)/(double)4096) - b1*dp_filteredSignal[i-1] - b2*dp_filteredSignal[i-2];
     }
 
-    return filtered_signal;
+    return dp_filteredSignal;
 }
 
-double* filter_signal(double* raw_signal, int size, double prev1, double prev2){    
-// coefficients used for the filtering. Online
+double* filter_signal(double* dp_bufferSignal, int i_singleBufferSize, double d_filteredPrev1, double d_filteredPrev2){    
+    // coefficients used for the filtering. Online
     double a0 = 0.8948577513857248;
     double a1 = -1.7897155027714495;
     double a2 = 0.8948577513857248;
     double b1 = -1.7786300789392977;
     double b2 = 0.8008009266036016;
 
-// new filtered signal
-    double* filtered_signal = (double*)malloc(sizeof(double)*size);
+    double* dp_filteredSignal = (double*)malloc(sizeof(double)*i_singleBufferSize); // filtered buffer
     // Initial values set to 0
-    filtered_signal[0] = prev1;
-    filtered_signal[1] = prev2;
+    dp_filteredSignal[0] = d_filteredPrev1;
+    dp_filteredSignal[1] = d_filteredPrev2;
 
-   for (int i=2; i<size; i++){
-        filtered_signal[i] = a0*raw_signal[i] + a1*raw_signal[i-1] + a2*raw_signal[i-2] - b1*filtered_signal[i-1] - b2*filtered_signal[i-2];
+    for (int i=2; i<i_singleBufferSize; i++){
+        dp_filteredSignal[i] = a0*dp_bufferSignal[i] + a1*dp_bufferSignal[i-1] + a2*dp_bufferSignal[i-2] - b1*dp_filteredSignal[i-1] - b2*dp_filteredSignal[i-2];
     }
 
-    return filtered_signal;
+    return dp_filteredSignal;
 }
