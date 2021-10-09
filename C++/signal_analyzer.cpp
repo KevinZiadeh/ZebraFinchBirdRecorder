@@ -4,7 +4,7 @@
 
 using namespace std;
 
-bool* analyze_signal(double* dp_filteredSignal, int i_singleBufferSize){
+bool analyze_signal(double* dp_filteredSignal, int i_singleBufferSize){
     // will return 1 if signal contains vocalization, 0 if it doesn't
     // First step is to find the total power in the signal
     double totalPower = 0;
