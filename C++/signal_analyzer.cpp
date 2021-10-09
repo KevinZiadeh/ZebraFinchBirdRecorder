@@ -86,9 +86,9 @@ bool analyze_signal(double* dp_filteredSignal, int i_singleBufferSize){
         notchedReferencePower += dp_notchedSignalFinal[i]*dp_notchedSignalFinal[i];
     }
 
-    float threshold = 0;
-    float notchedRatio;
-    float notchedReferenceRatio;
+    double threshold = 0; // to be determined experimentally
+    double notchedRatio = notchedPower / totalPower;
+    double notchedReferenceRatio = notchedReferencePower / totalPower;
     if(abs(notchedRatio - notchedReferenceRatio) >= threshold ){ return true;}
     else{ return false;}
 
