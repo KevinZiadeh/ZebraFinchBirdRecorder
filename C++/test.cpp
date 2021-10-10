@@ -1,6 +1,6 @@
 #include <vector>
 #include <iostream>
-#include "noise_filter.h"
+#include "signal_processing.h"
 #include "csv_reader.h"
 #include <string>
 #include <thread>
