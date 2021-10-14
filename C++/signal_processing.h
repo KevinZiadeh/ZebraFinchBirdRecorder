@@ -31,4 +31,4 @@ double* filter_signal(double* dp_bufferSignal, int i_singleBufferSize, double d_
  * @return true when the signal corresponds to a vocalisation 
  * @return false when the signal does not correspond to a vocalisation
  */
-bool analyze_signal(double* dp_filteredSignal, int i_signalSize)
+bool analyze_signal(double* dp_filteredSignal, int i_signalSize);

@@ -19,6 +19,7 @@ using namespace std;
 // Headers of defined functions
 double* test_filter(double* dp_rawSignal, int i_size);
 void compare_matlab(double* dp_filteredSignal, int i_size);
+void test_analysis(double* dp_rawSignal, int i_size);
 void ADCReader(double* dp_rawSignal,  double* dp_audioBuffer, int i_buffer1Head, 
                 int i_buffer2Head, int i_buffer1Tail, int i_buffer2Tail, int i_CompleteDataSize);
 double* Filter(double* buffer, int head, int i_size);
@@ -55,9 +56,11 @@ int main(){
     }
     int i_CompleteDataSize = vd_data.size(); // total number of testing data points
 
+    test_analysis(dp_rawSignal, i_CompleteDataSize);
+
     // launch thread that reads data asynchronously continuously 
-    future<void> readerThread = async(launch::async, ADCReader, dp_rawSignal, dp_audioBuffer,  i_buffer1Head, 
-                i_buffer2Head, i_buffer1Tail, i_buffer2Tail, i_CompleteDataSize);
+    // future<void> readerThread = async(launch::async, ADCReader, dp_rawSignal, dp_audioBuffer,  i_buffer1Head, 
+    //             i_buffer2Head, i_buffer1Tail, i_buffer2Tail, i_CompleteDataSize);
     return 0;
 }
 
@@ -107,6 +110,31 @@ void compare_buffer_nobuffer(double* dp_rawSignal, double* dp_sdCard, int i_size
         cout << i << " - C++ Complete: " << dp_filteredSignal[i] 
         << " - C++ Buffer: " << dp_sdCard[i] << " - Equal? " 
         << (abs(dp_filteredSignal[i]-dp_sdCard[i])<d_precision ? "True" : "False") << endl;
+    }
+}
+
+/**
+ * @brief function that tests the analysis implementation
+ * 
+ * @param dp_filteredSignal array that contains the filtered signal
+ * @param i_size size of the array
+ */
+void test_analysis(double* dp_rawSignal, int i_size){
+    double* dp_filteredSignal = filter_signal(dp_rawSignal, i_size, 0, 0);
+    int i_chunkSize = 2000; // size of the subset of the signal to analyse
+    double* dp_chunkedSignal = (double *)malloc(sizeof(double)*i_chunkSize);
+    bool b_analysisResult = false;
+    for (int i = 0; i < i_size/i_chunkSize; i++){
+        for (int j = 0; j < i_chunkSize; j++){
+            dp_chunkedSignal[j] = dp_filteredSignal[(int)(i*(i_chunkSize)/4)+j];
+        }
+        print_point(dp_chunkedSignal, i_chunkSize)
+        // b_analysisResult = analyze_signal(dp_chunkedSignal, i_chunkSize);
+        // cout 
+        //     << setw(10) << (i*(i_chunkSize)/4))*0.000125 << "s" 
+        //     << setw(10) << (i*(i_chunkSize)/4) + i_chunkSize)*0.000125 << "s" 
+        //     << setw(10) << " -> " << (b_analysisResult ? "True" : "False") 
+        //     << endl;
     }
 }
 
