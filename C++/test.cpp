@@ -6,6 +6,7 @@
 #include <thread>
 #include <future>         // std::async, std::future
 #include <iomanip>      // std::setprecision
+#include<fstream>
 
 using namespace std;
 
@@ -121,21 +122,23 @@ void compare_buffer_nobuffer(double* dp_rawSignal, double* dp_sdCard, int i_size
  */
 void test_analysis(double* dp_rawSignal, int i_size){
     double* dp_filteredSignal = filter_signal(dp_rawSignal, i_size, 0, 0);
-    int i_chunkSize = 2000; // size of the subset of the signal to analyse
+    int i_chunkSize = 2000; // size of the subset of the signal to analyse (0.25s on 8KHz)
     double* dp_chunkedSignal = (double *)malloc(sizeof(double)*i_chunkSize);
     bool b_analysisResult = false;
-    for (int i = 0; i < i_size/i_chunkSize; i++){
+    ofstream fout1; 
+    ofstream fout2; 
+    fout1.open("C:\\Users\\ZPKev\\University\\OneDrive - American University of Beirut\\EECE\\501\\ZebraFinchBirdRecorder\\C++\\cpp_analysis_data.txt", std::ofstream::out | std::ofstream::app);
+    fout2.open("C:\\Users\\ZPKev\\University\\OneDrive - American University of Beirut\\EECE\\501\\ZebraFinchBirdRecorder\\C++\\cpp_time_data.txt", std::ofstream::out | std::ofstream::app);
+    for (int i = 0; i < 4*i_size/i_chunkSize; i++){
         for (int j = 0; j < i_chunkSize; j++){
             dp_chunkedSignal[j] = dp_filteredSignal[(int)(i*(i_chunkSize)/4)+j];
         }
-        print_point(dp_chunkedSignal, i_chunkSize)
-        // b_analysisResult = analyze_signal(dp_chunkedSignal, i_chunkSize);
-        // cout 
-        //     << setw(10) << (i*(i_chunkSize)/4))*0.000125 << "s" 
-        //     << setw(10) << (i*(i_chunkSize)/4) + i_chunkSize)*0.000125 << "s" 
-        //     << setw(10) << " -> " << (b_analysisResult ? "True" : "False") 
-        //     << endl;
+        b_analysisResult = analyze_signal(dp_chunkedSignal, i_chunkSize);
+        fout1<<(int)b_analysisResult<<endl;
+        fout2<<(i*(i_chunkSize)/4)*0.000125<<endl;
     }
+    fout1.close();
+    fout2.close();
 }
 
 /**

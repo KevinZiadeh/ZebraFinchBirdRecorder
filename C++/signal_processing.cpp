@@ -56,20 +56,21 @@ bool analyze_signal(double* dp_filteredSignal, int i_signalSize){
     // Band Pass at 2.2 kHz (for now)
     
     // Assuming 6 kHz sampling frequency (ESP ADC Frequency)
-    double a0 = 0.3444719716111889;
-    double a1 = 0;
-    double a2 = -0.3444719716111889;
-    double b1 = 0.8772677342420642;
-    double b2 = 0.3110560567776222;
+    // double a0 = 0.3444719716111889;
+    // double a1 = 0;
+    // double a2 = -0.3444719716111889;
+    // double b1 = 0.8772677342420642;
+    // double b2 = 0.3110560567776222;
 
     // Assuming 8 kHz sampling frequency (Analog Discovery Tool acquired)
-    /*
+    // Used for testing
+    
     double a0 = 0.4112132624576583;
     double a1 = 0;
     double a2 = -0.4112132624576583;
     double b1 = 0.1842130766204379;
     double b2 = 0.17757347508468332;
-    */
+    
 
     double* dp_notchedSignal = (double*)malloc(sizeof(double)*i_signalSize);
 
@@ -95,20 +96,19 @@ bool analyze_signal(double* dp_filteredSignal, int i_signalSize){
     // Bandpass at 400 Hz (for now)
 
     // Assuming 6 kHz sampling frequency (ESP ADC Frequency)
-    a0 = 0.22336671878312517;
-    a1 = 0;
-    a2 = -0.22336671878312517;
-    b1 = -1.4189796126194893;
-    b2 = 0.5532665624337496;
+    // a0 = 0.22336671878312517;
+    // a1 = 0;
+    // a2 = -0.22336671878312517;
+    // b1 = -1.4189796126194893;
+    // b2 = 0.5532665624337496;
 
     // Assuming 8 kHz sampling frequency (Analog Discovery Tool acquired)
-    /*
     a0 = 0.17932564232111428;
     a1 = 0;
     a2 = -0.17932564232111428;
     b1 = -1.5610153912536877;
     b2 = 0.6413487153577715;
-    */
+    
     
     // Reusing/Resetting notchedSignal array as to not waste memory
     dp_notchedSignal[0] = dp_filteredSignal[0];
@@ -125,8 +125,9 @@ bool analyze_signal(double* dp_filteredSignal, int i_signalSize){
         notchedReferencePower += dp_notchedSignal[i]*dp_notchedSignal[i];
     }
 
-    double threshold = 0; // to be determined experimentally
+    double threshold = 7; // to be determined experimentally
     double notchedRatio = notchedPower / totalPower;
     double notchedReferenceRatio = notchedReferencePower / totalPower;
-    return (abs(notchedRatio - notchedReferenceRatio) >= threshold);
+    double notchedToReferenceRatio = notchedPower/notchedReferencePower;
+    return (notchedToReferenceRatio >= threshold);
 }
