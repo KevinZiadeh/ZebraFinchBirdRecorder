@@ -44,7 +44,7 @@ double* filter_signal(double* dp_bufferSignal, int i_singleBufferSize, double d_
     return dp_filteredSignal;
 }
 
-bool analyze_signal(double* dp_filteredSignal, int i_signalSize){
+int analyze_signal(double* dp_filteredSignal, int i_signalSize, double d_threshhold){
     // First step is to find the total power in the signal
     double totalPower = 0;
     for (int i=0; i<i_signalSize; i++){
@@ -125,9 +125,8 @@ bool analyze_signal(double* dp_filteredSignal, int i_signalSize){
         notchedReferencePower += dp_notchedSignal[i]*dp_notchedSignal[i];
     }
 
-    double threshold = 7; // to be determined experimentally
     double notchedRatio = notchedPower / totalPower;
     double notchedReferenceRatio = notchedReferencePower / totalPower;
     double notchedToReferenceRatio = notchedPower/notchedReferencePower;
-    return (notchedToReferenceRatio >= threshold);
+    return (notchedToReferenceRatio >= d_threshhold);
 }

@@ -28,7 +28,8 @@ double* filter_signal(double* dp_bufferSignal, int i_singleBufferSize, double d_
  * 
  * @param dp_filteredSignal pointer to the filtered signal 
  * @param i_signalSize size of the filtered signal
- * @return true when the signal corresponds to a vocalisation 
- * @return false when the signal does not correspond to a vocalisation
+ * @param d_threshold threshold to compare with for vocalisation detection
+ * @return 1 when the signal corresponds to a vocalisation 
+ * @return -1 when the signal does not correspond to a vocalisation
  */
-bool analyze_signal(double* dp_filteredSignal, int i_signalSize);
+int analyze_signal(double* dp_filteredSignal, int i_signalSize, double d_threshold);
