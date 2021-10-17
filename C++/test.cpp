@@ -36,7 +36,7 @@ double u16_filteredPrev2 = 0; // last element of previously filtered buffer
 double d_rawPrev1 = 0; // before last element of previous buffer before filtering
 double d_rawPrev2 = 0; // last element of previous buffer before filtering
 int i_analyseResult = 0; // result of the analysis to decide if we want to save or not 
-bool i_mergeBuffer = 0; // selects if we need to merge current buffer with previous one: THREE STATES -> YES, YES/NO, NO. This is done in order to save instances together when there is only one buffer of difference of no
+int i_mergeBuffer = 0; // selects if we need to merge current buffer with previous one: THREE STATES -> YES, YES/NO, NO. This is done in order to save instances together when there is only one buffer of difference of no
 int i_startCopyIndex = (int)((0.6*BUFFER_SIZE+0.5)); // selects the beginning of the last 25% of the SINGLE BUFFER (which is 80% of the BUFFER)
 
 /**
