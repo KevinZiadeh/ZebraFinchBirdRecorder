@@ -15,7 +15,7 @@ using namespace std;
 #define print_point(point, size) for(int i=0;i<min(size, 100);i++) {cout << setprecision(9) << point[i] << " ";} cout << endl;
 
 // Complete buffer size (combination of buffer 1 + buffer 2) -> 0.8*BUFFER_SIZE == Buffer1 -> 1 second
-#define BUFFER_SIZE 5120
+#define BUFFER_SIZE 5000
 
 // Headers of defined functions
 double* test_filter(double* dp_rawSignal, int i_size);
@@ -38,6 +38,9 @@ double d_rawPrev2 = 0; // last element of previous buffer before filtering
 int i_analyseResult = 0; // result of the analysis to decide if we want to save or not 
 bool i_mergeBuffer = 0; // selects if we need to merge current buffer with previous one: THREE STATES -> YES, YES/NO, NO. This is done in order to save instances together when there is only one buffer of difference of no
 int i_startCopyIndex = (int)((0.6*BUFFER_SIZE+0.5)); // selects the beginning of the last 25% of the SINGLE BUFFER (which is 80% of the BUFFER)
+double* dp_filteredSignalAfterBuffer = (double *)malloc(sizeof(double)*262144); 
+int i_filteredSignalAfterBufferIndex = 0; 
+int b_filteredSignalAfterBufferIndex = false; 
 
 /**
  * @brief Main function that initiliazes everything
@@ -59,7 +62,8 @@ int main(){
     }
     int i_CompleteDataSize = vd_data.size(); // total number of testing data points
 
-    test_analysis(dp_rawSignal, i_CompleteDataSize);
+
+    // test_analysis(dp_rawSignal, i_CompleteDataSize);
 
     // launch thread that reads data asynchronously continuously 
     future<void> readerThread = async(launch::async, ADCReader, dp_rawSignal, dp_audioBuffer,  i_buffer1Head, 
@@ -76,11 +80,11 @@ int main(){
  * @return double* to the filtered array
  */
 double* test_filter(double* dp_rawSignal, int i_size){
-    this_thread::sleep_for(1s);
-    chrono::steady_clock::time_point begin = chrono::steady_clock::now();
+    // this_thread::sleep_for(1s);
+    // chrono::steady_clock::time_point begin = chrono::steady_clock::now();
     double* dp_filteredSignal = filter_signal(dp_rawSignal, i_size, 0, 0);
-    chrono::steady_clock::time_point end1 = chrono::steady_clock::now();
-    cout << "Filtering function took " << chrono::duration_cast<chrono::microseconds>(end1 - begin).count() << "muS" << endl;
+    // chrono::steady_clock::time_point end1 = chrono::steady_clock::now();
+    // cout << "Filtering function took " << chrono::duration_cast<chrono::microseconds>(end1 - begin).count() << "muS" << endl;
     return dp_filteredSignal;
 }
 
@@ -100,7 +104,7 @@ void compare_matlab(double* dp_filteredSignal, int i_size){
         // << (abs(dp_filteredSignal[i]-vd_matlabFilteredSignal[i])<d_precision ? "True" : "False") << endl;
         i_numFalse += (int)(abs(dp_filteredSignal[i]-vd_matlabFilteredSignal[i])>=d_precision);
     }
-    cout << i_numFalse << endl;
+    cout << "Number of filtered elements that aren't equal to the MATLAB filer is " << i_numFalse << endl;
 }
 
 /**
@@ -110,14 +114,17 @@ void compare_matlab(double* dp_filteredSignal, int i_size){
  * @param vvd_sdCard array that indicates the values saved in the SD card
  * @param i_size size of comparision points -> shouldn't exceed max size
  */
-void compare_buffer_nobuffer(double* dp_rawSignal, double* vvd_sdCard, int i_size){
+void compare_buffer_nobuffer(double* dp_rawSignal, double* dp_filteredSignalBuffered, int i_size){
     double* dp_filteredSignal = test_filter(dp_rawSignal, i_size);
     double d_precision = 0.0000001;
-    for (int i =400;i<i_size;i++){
-        cout << i << " - C++ Complete: " << dp_filteredSignal[i] 
-        << " - C++ Buffer: " << vvd_sdCard[i] << " - Equal? " 
-        << (abs(dp_filteredSignal[i]-vvd_sdCard[i])<d_precision ? "True" : "False") << endl;
+    int i_numFalse = 0;
+    for (int i =0;i<i_size;i++){
+        // cout << i << " - C++ Complete: " << dp_filteredSignal[i] 
+        // << " - C++ Buffer: " << dp_filteredSignalBuffered[i] << " - Equal? " 
+        // << (abs(dp_filteredSignal[i]-dp_filteredSignalBuffered[i])<d_precision ? "True" : "False") << endl;
+        i_numFalse += (int)(abs(dp_filteredSignal[i]-dp_filteredSignalBuffered[i])>=d_precision);
     }
+    cout << "Number of filtered elements using buffer implementation that are not equal to no buffer implementation is " << i_numFalse << endl;
 }
 
 /**
@@ -126,22 +133,20 @@ void compare_buffer_nobuffer(double* dp_rawSignal, double* vvd_sdCard, int i_siz
  * @param dp_filteredSignal array that contains the filtered signal
  * @param i_size size of the array
  */
-void test_analysis(double* dp_rawSignal, int i_size){
-    double* dp_filteredSignal = filter_signal(dp_rawSignal, i_size, 0, 0);
+void test_analysis(double* dp_filteredSignal, int i_size){
     int i_chunkSize = 2000; // size of the subset of the signal to analyse (0.25s on 8KHz)
     double* dp_chunkedSignal = (double *)malloc(sizeof(double)*i_chunkSize);
-    bool b_analysisResult = false;
-    compare_matlab(dp_filteredSignal, i_size);
+    string s_cppAnalysisFile = "C:\\Users\\ZPKev\\University\\OneDrive - American University of Beirut\\EECE\\501\\ZebraFinchBirdRecorder\\C++\\cpp_analysis_data.txt";
+    string s_cppTimeFile = "C:\\Users\\ZPKev\\University\\OneDrive - American University of Beirut\\EECE\\501\\ZebraFinchBirdRecorder\\C++\\cpp_time_data.txt";
     ofstream fout1; 
     ofstream fout2; 
-    fout1.open("C:\\Users\\ZPKev\\University\\OneDrive - American University of Beirut\\EECE\\501\\ZebraFinchBirdRecorder\\C++\\cpp_analysis_data.txt", std::ofstream::out | std::ofstream::app);
-    fout2.open("C:\\Users\\ZPKev\\University\\OneDrive - American University of Beirut\\EECE\\501\\ZebraFinchBirdRecorder\\C++\\cpp_time_data.txt", std::ofstream::out | std::ofstream::app);
+    fout1.open(s_cppAnalysisFile, std::ofstream::out);
+    fout2.open(s_cppTimeFile, std::ofstream::out);
     for (int i = 0; i < 4*i_size/i_chunkSize; i++){
         for (int j = 0; j < i_chunkSize; j++){
             dp_chunkedSignal[j] = dp_filteredSignal[(int)(i*(i_chunkSize)/4)+j];
         }
-        b_analysisResult = analyze_signal(dp_chunkedSignal, i_chunkSize, 7);
-        fout1<<(int)b_analysisResult<<endl;
+        fout1<<(int)analyze_signal(dp_chunkedSignal, i_chunkSize, 7)<<endl;
         fout2<<(i*(i_chunkSize)/4)*0.000125<<endl;
     }
     fout1.close();
@@ -154,27 +159,26 @@ void test_analysis(double* dp_rawSignal, int i_size){
  * @param i_size size of the complete input data 
  */
 void generate_sdCardPlotData(int i_size){
+    string s_sdAnalysisFile = "C:\\Users\\ZPKev\\University\\OneDrive - American University of Beirut\\EECE\\501\\ZebraFinchBirdRecorder\\C++\\sd_analysis_data.txt";
+    string s_sdTimeFile = "C:\\Users\\ZPKev\\University\\OneDrive - American University of Beirut\\EECE\\501\\ZebraFinchBirdRecorder\\C++\\sd_time_data.txt";
     ofstream fout1; 
     ofstream fout2; 
-    fout1.open("C:\\Users\\ZPKev\\University\\OneDrive - American University of Beirut\\EECE\\501\\ZebraFinchBirdRecorder\\C++\\sd_analysis_data.txt", std::ofstream::out | std::ofstream::app);
-    fout2.open("C:\\Users\\ZPKev\\University\\OneDrive - American University of Beirut\\EECE\\501\\ZebraFinchBirdRecorder\\C++\\sd_time_data.txt", std::ofstream::out | std::ofstream::app);
+    fout1.open(s_sdAnalysisFile, std::ofstream::out);
+    fout2.open(s_sdTimeFile, std::ofstream::out);    
     int i_SDcardSample = 0; // which sample of the SD card we are using
     int i = 0;
     while (i<i_size){
-        // cout << vvd_sdCard[i_SDcardSample][0] << endl;
         if (vvd_sdCard[i_SDcardSample][0] != i){
             fout1 << 0 << endl;
             fout2 << i*0.000125<<endl;
             i++;
         } else{
-            cout << vvd_sdCard[i_SDcardSample][0] << '\t' << vvd_sdCard[i_SDcardSample].size() << endl;
             for (int j = 0; j<vvd_sdCard[i_SDcardSample].size();j++){
                 fout1 << 1 << endl;
                 fout2 << (i+j)*0.000125<<endl;
             }
             i = i+vvd_sdCard[i_SDcardSample].size()+1;
             i_SDcardSample++;
-            cout << "new i = " << i << " new SD card begin = " << vvd_sdCard[i_SDcardSample][0] << endl;
         }
     }
     fout1.close();
@@ -219,12 +223,11 @@ void ADCReader(double* dp_rawSignal,  double* dp_audioBuffer, int i_buffer1Head,
         i_iter = i_iter%(BUFFER_SIZE+1);
         this_thread::sleep_for(0.0005s);    
     }
-    for (auto e: vvd_sdCard){
-        cout << "time i: ";
-        cout << e[0] << "  size -> " << e.size() << " ";
-        cout << endl;
-    }
-    generate_sdCardPlotData(i_CompleteDataSize);
+
+    compare_buffer_nobuffer(dp_rawSignal, dp_filteredSignalAfterBuffer, i_CompleteDataSize);
+    compare_matlab(dp_filteredSignalAfterBuffer, i_CompleteDataSize);
+    test_analysis(dp_filteredSignalAfterBuffer, i_CompleteDataSize);
+    // generate_sdCardPlotData(i_CompleteDataSize);
 }
 
 
@@ -246,36 +249,37 @@ int Filter(double* dp_buffer, int i_head, int i_singleBufferSize, int i_generalL
     d_filteredPrev1 = dp_filteredSignal[i_singleBufferSize-2];
     d_filteredPrev2 = dp_filteredSignal[i_singleBufferSize-1];
 
-    i_analyseResult = analyze_signal(dp_filteredSignal, i_singleBufferSize, 7);
-    // add to sd card will be done after setting merge buffer by analysis, 
-    // but for testing purposes, we want to save the complete first buffer
-    // then start appending
 
-    cout << i_analyseResult << '\t' << i_generalLocation << endl;
-    int i_startCopyIndex = (int)((0.6*BUFFER_SIZE+0.5));
-    if (i_analyseResult == 1){
-        cout << "in";
-        vector<double> instance;
-        if (i_mergeBuffer == 0){
-            cout << "in";
-            instance.push_back(i_generalLocation);
-            for(int i=0;i<i_singleBufferSize;i++) {
-                instance.push_back(dp_filteredSignal[i]);
-            }
-            vvd_sdCard.push_back(instance);
-        } else{
-            cout << "in2";
-            for(int i=i_startCopyIndex;i<i_singleBufferSize;i++) {
-                vvd_sdCard.back().push_back(dp_filteredSignal[i]);
-            }
-        }
-        i_mergeBuffer = 1;
-        cout << "out";
-        return i_mergeBuffer;
-    } else{
-        i_mergeBuffer = 0;
-        return i_mergeBuffer;
+    // tests that the filtering and mergind is equal to filtering of complete data
+    int i_filteredSignalAfterBufferStartIndex = (int)((b_filteredSignalAfterBufferIndex*0.6*BUFFER_SIZE+0.5));
+    for(int i=i_filteredSignalAfterBufferStartIndex;i<i_singleBufferSize;i++) {
+        dp_filteredSignalAfterBuffer[i_filteredSignalAfterBufferIndex] = dp_filteredSignal[i];
+        i_filteredSignalAfterBufferIndex++;
     }
+    b_filteredSignalAfterBufferIndex = true;
+
+
+    // i_analyseResult = analyze_signal(dp_filteredSignal, i_singleBufferSize, 7);
+
+    // if (i_analyseResult == 1){
+    //     vector<double> instance;
+    //     if (i_mergeBuffer == 0){
+    //         instance.push_back(i_generalLocation);
+    //         for(int i=0;i<i_singleBufferSize;i++) {
+    //             instance.push_back(dp_filteredSignal[i]);
+    //         }
+    //         vvd_sdCard.push_back(instance);
+    //     } else{
+    //         for(int i=i_startCopyIndex;i<i_singleBufferSize;i++) {
+    //             vvd_sdCard.back().push_back(dp_filteredSignal[i]);
+    //         }
+    //     }
+    //     i_mergeBuffer = 1;
+    //     return i_mergeBuffer;
+    // } else{
+    //     i_mergeBuffer = 0;
+    //     return i_mergeBuffer;
+    // }
 
     // if (i_analyseResult + i_mergeBuffer < 1) {
     //     i_mergeBuffer = 0;
