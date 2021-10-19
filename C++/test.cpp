@@ -35,12 +35,16 @@ double u16_filteredPrev1 = 0; // before last element of previously filtered buff
 double u16_filteredPrev2 = 0; // last element of previously filtered buffer
 double d_rawPrev1 = 0; // before last element of previous buffer before filtering
 double d_rawPrev2 = 0; // last element of previous buffer before filtering
-int i_analyseResult = 0; // result of the analysis to decide if we want to save or not 
+int i_vocalisationDetected = 0; // result of the analysis to decide if we want to save or not 
 int i_mergeState = 0; // selects if we need to merge current buffer with previous one: THREE STATES -> YES, YES/NO, NO. This is done in order to save instances together when there is only one buffer of difference of no
 int i_startCopyIndex = (int)((0.6*BUFFER_SIZE+0.5)); // selects the beginning of the last 25% of the SINGLE BUFFER (which is 80% of the BUFFER)
 double* dp_filteredSignalAfterBuffer = (double *)malloc(sizeof(double)*262144); 
 int i_filteredSignalAfterBufferIndex = 0; 
 int b_filteredSignalAfterBufferIndex = false; 
+int d_notchedSignalPrev1 = 0;
+int d_notchedSignalPrev2 = 0;
+int d_notchedReferenceSignalPrev1 = 0;
+int d_notchedReferenceSignalPrev2 = 0;
 
 /**
  * @brief Main function that initiliazes everything
@@ -143,8 +147,11 @@ void test_analysis(double* dp_filteredSignal, int i_size){
         for (int j = 0; j < i_chunkSize; j++){
             dp_chunkedSignal[j] = dp_filteredSignal[(int)(i*(i_chunkSize)/4)+j];
         }
-        fout1<<(int)analyze_signal(dp_chunkedSignal, i_chunkSize, 6)<<endl;
+        int i_analysisResult = (int)analyze_signal(dp_chunkedSignal, i_chunkSize,0, 0, 0, 0, 7)[4];
+        fout1<<(int)i_analysisResult<<endl;
         fout2<<(i*(i_chunkSize)/4)*0.000125<<endl;
+        fout1<<(int)i_analysisResult<<endl;
+        fout2<<((i*(i_chunkSize)/4)+(i_chunkSize/4))*0.000125<<endl;
     }
     fout1.close();
     fout2.close();
@@ -181,13 +188,13 @@ void generate_sdCardPlotData(int i_size){
     fout2 << -0.000125 << endl;
     fout1 << 0 << endl;
     for (auto row: vvd_sdCard){
-        fout2 << (row[0]-1)*0.000125 << endl;
+        fout2 << (row[0])*0.000125 << endl;
         fout1 << 0 << endl;
         fout2 << row[0]*0.000125 << endl;
         fout1 << 1 << endl;
         fout2 << (row[0]+row.size())*0.000125 << endl;
         fout1 << 1 << endl;
-        fout2 << (row[0]+row.size()+1)*0.000125 << endl;
+        fout2 << (row[0]+row.size())*0.000125 << endl;
         fout1 << 0 << endl;
     }
     fout1.close();
@@ -270,8 +277,12 @@ int Filter(double* dp_buffer, int i_head, int i_singleBufferSize, int i_generalL
     }
     b_filteredSignalAfterBufferIndex = true;
 
-
-    i_analyseResult = analyze_signal(dp_filteredSignal, i_singleBufferSize, 6.5);
+    double* dp_analysisResult = analyze_signal(dp_filteredSignal, i_singleBufferSize, d_notchedSignalPrev1, d_notchedSignalPrev2, d_notchedReferenceSignalPrev1, d_notchedReferenceSignalPrev2, 7);
+    i_vocalisationDetected = (int)dp_analysisResult[4];
+    d_notchedSignalPrev1 = dp_analysisResult[0];
+    d_notchedSignalPrev2 = dp_analysisResult[1]; 
+    d_notchedReferenceSignalPrev1 = dp_analysisResult[2];
+    d_notchedReferenceSignalPrev2 = dp_analysisResult[3];
 
     vector<double> instance;
     // instance.push_back(i_generalLocation);
@@ -338,11 +349,11 @@ int Filter(double* dp_buffer, int i_head, int i_singleBufferSize, int i_generalL
     //     i_mergeState = min(i_mergeState+((2*i_analyseResult)-1), 2);
     // }
 
-    if (((2*i_analyseResult)-1) + i_mergeState < 1) {
+    if (((2*i_vocalisationDetected)-1) + i_mergeState < 1) {
         i_mergeState = 0;
         return i_mergeState;
     }
-    if (i_mergeState == 0 && ((2*i_analyseResult)-1) == 1){
+    if (i_mergeState == 0 && ((2*i_vocalisationDetected)-1) == 1){
         vector<double> instance;
         i_mergeState = 2;
         instance.push_back(i_generalLocation);
@@ -355,7 +366,7 @@ int Filter(double* dp_buffer, int i_head, int i_singleBufferSize, int i_generalL
             // select last element in the sd_card and add to it
             vvd_sdCard.back().push_back(dp_filteredSignal[i]);
         }
-        i_mergeState = min(i_mergeState+((2*i_analyseResult)-1), 2);
+        i_mergeState = min(i_mergeState+((2*i_vocalisationDetected)-1), 2);
     }
     return i_mergeState;
 }

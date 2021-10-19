@@ -44,9 +44,9 @@ double* filter_signal(double* dp_bufferSignal, int i_singleBufferSize, double d_
     return dp_filteredSignal;
 }
 
-int analyze_signal(double* dp_filteredSignal, int i_signalSize, double d_threshhold){
-    // First step is to find the total power in the signal
+double* analyze_signal(double* dp_filteredSignal, int i_signalSize, double d_notchedSignalPrev1, double d_notchedSignalPrev2, double d_notchedReferenceSignalPrev1, double d_notchedReferenceSignalPrev2, double d_threshhold){    // First step is to find the total power in the signal
     double totalPower = 0;
+    double* dp_response = (double *)malloc(sizeof(double)*5); 
     for (int i=0; i<i_signalSize; i++){
         totalPower += dp_filteredSignal[i]*dp_filteredSignal[i];
     }
@@ -75,13 +75,14 @@ int analyze_signal(double* dp_filteredSignal, int i_signalSize, double d_threshh
     double* dp_notchedSignal = (double*)malloc(sizeof(double)*i_signalSize);
 
     // Taking in initial values for now, might need to implement crossover (like filtering)
-    dp_notchedSignal[0] = dp_filteredSignal[0];
-    dp_notchedSignal[1] = dp_filteredSignal[1];
+    dp_notchedSignal[0] = d_notchedSignalPrev1;
+    dp_notchedSignal[1] = d_notchedSignalPrev2;
 
     for (int i=2; i<i_signalSize; i++){
         dp_notchedSignal[i] = a0*dp_filteredSignal[i] + a1*dp_filteredSignal[i-1] + a2*dp_filteredSignal[i-2] - b1*dp_notchedSignal[i-1] - b2*dp_notchedSignal[i-2];
     }
-
+    dp_response[0] = dp_notchedSignal[i_signalSize-2];
+    dp_response[1] = dp_notchedSignal[i_signalSize-1];
     // Find power in the filtered signal (i.e. Power at 2 kHz)
     double notchedPower = 0;
 
@@ -111,13 +112,14 @@ int analyze_signal(double* dp_filteredSignal, int i_signalSize, double d_threshh
     
     
     // Reusing/Resetting notchedSignal array as to not waste memory
-    dp_notchedSignal[0] = dp_filteredSignal[0];
-    dp_notchedSignal[1] = dp_filteredSignal[1];
+    dp_notchedSignal[0] = d_notchedReferenceSignalPrev1;
+    dp_notchedSignal[1] = d_notchedReferenceSignalPrev2;
 
     for (int i=2; i<i_signalSize; i++){
         dp_notchedSignal[i] = a0*dp_filteredSignal[i] + a1*dp_filteredSignal[i-1] + a2*dp_filteredSignal[i-2] - b1*dp_notchedSignal[i-1] - b2*dp_notchedSignal[i-2];
     }
-
+    dp_response[2] = dp_notchedSignal[i_signalSize-2];
+    dp_response[3] = dp_notchedSignal[i_signalSize-1];
     // Find power in the reference notched signal (i.e. Power at 400 Hz)
     double notchedReferencePower = 0;
 
@@ -128,5 +130,6 @@ int analyze_signal(double* dp_filteredSignal, int i_signalSize, double d_threshh
     double notchedRatio = notchedPower / totalPower;
     double notchedReferenceRatio = notchedReferencePower / totalPower;
     double notchedToReferenceRatio = notchedPower/notchedReferencePower;
-    return (notchedToReferenceRatio >= d_threshhold);
+    dp_response[4] = (notchedToReferenceRatio >= d_threshhold);
+    return dp_response;
 }
