@@ -30,6 +30,6 @@ double* filter_signal(double* dp_bufferSignal, int i_singleBufferSize, double d_
  * @param i_signalSize size of the filtered signal
  * @param d_threshold threshold to compare with for vocalisation detection
  * @return 1 when the signal corresponds to a vocalisation 
- * @return -1 when the signal does not correspond to a vocalisation
+ * @return 0 when the signal does not correspond to a vocalisation
  */
-int analyze_signal(double* dp_filteredSignal, int i_signalSize, double d_threshold);
+double* analyze_signal(double* dp_filteredSignal, int i_signalSize, double d_notchedSignalPrev1, double d_notchedSignalPrev2, double d_notchedReferenceSignalPrev1, double d_notchedReferenceSignalPrev2, double d_threshhold);

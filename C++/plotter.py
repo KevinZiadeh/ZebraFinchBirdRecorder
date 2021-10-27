@@ -16,6 +16,6 @@ with open('./cpp_time_data.txt') as f:
     x = f.read()[:-1].split()
     x_val_cpp = [float(e) for e in x]
 
-plt.plot(x_val_cpp, y_int_cpp)
+plt.plot(x_val_cpp, y_int_cpp, color='green', linestyle='dashed')
 plt.plot(x_val_sd, y_int_sd)
 plt.show()
