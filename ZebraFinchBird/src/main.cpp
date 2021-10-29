@@ -18,7 +18,7 @@ void SD_Writer(void * pvParameters);
 
 // Replace with your network credentials
 const char* ssid     = "SamsungTarek";
-const char* password = "adamadam";
+const char* password = "kevinziadeh";
 
 // Timer variables
 unsigned long lastTime = 0;
@@ -61,12 +61,12 @@ void initWiFi() {
 }
 
 // Initialize SD Card
-void initSDCard(){
+bool initSDCard(){
     uint8_t retries = 50;
     while (!SD.begin()){
         if (!retries){
             Serial.println("Card Mount Failed");
-            return;
+            return false;
          }
          retries--;
 
@@ -75,7 +75,7 @@ void initSDCard(){
 
     if(cardType == CARD_NONE){
         Serial.println("No SD card attached");
-        return;
+        return false;
     }
 
     Serial.print("SD Card Type: ");
@@ -95,6 +95,7 @@ void initSDCard(){
     Serial.printf("Used space: %lluMB\n", SD.usedBytes() / (1024 * 1024));
 
     listDir(SD, "/", 0);
+    return true;
 }
 
 // // Write to the SD card
@@ -140,7 +141,7 @@ void setup(){
     Serial.begin(115200);
     
     // initWiFi();
-    initSDCard();
+    if (!initSDCard()) return;
     configTime(0, 0, ntpServer);
 
     // If the data.txt file doesn't exist
@@ -155,6 +156,7 @@ void setup(){
         Serial.println("File already exists");  
     }
     file.close();
+    // epochTime = getTime();
 
 
 
@@ -166,9 +168,9 @@ void setup(){
     // int buffer1_tail = BUFFER_SIZE;
     // int buffer2_tail = BUFFER_SIZE;
 
-    xTaskCreatePinnedToCore(ADC_Reader, "ADC Reader", 5000, NULL, 1, &ADCTask, 0);
+    // xTaskCreatePinnedToCore(ADC_Reader, "ADC Reader", 5000, NULL, 1, &ADCTask, 0);
     
-    xTaskCreatePinnedToCore(SD_Writer, "SD Writer", 5000, NULL, 1, &SDTask, 1);
+    // xTaskCreatePinnedToCore(SD_Writer, "SD Writer", 5000, NULL, 1, &SDTask, 1);
     
 }
 
@@ -195,11 +197,12 @@ void SD_Writer(void * pvParameters){
     Serial.print("Voltage = ");
     Serial.print(ADC_VALUE);
     voltage_value = (ADC_VALUE * 3.3)/4096;
-    dataMessage = String(ADC_VALUE) + "," + String(voltage_value, 16) + "\r\n";
+    dataMessage = String((epochTime*1000 + millis())) + "," + String(ADC_VALUE) + "," + String(voltage_value, 16) + "\r\n";
     appendFile(SD, "/data.txt", dataMessage.c_str());
 
     vTaskDelete(NULL);
 }
 
 void loop(){
+    // Serial.println(epochTime*1000 + millis());
 }
