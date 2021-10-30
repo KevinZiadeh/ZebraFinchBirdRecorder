@@ -1,6 +1,7 @@
 #include <stdint.h>
 #include <windows.h>
 #include <iostream>
+#include<fstream>
 
 using namespace std;
 
@@ -81,8 +82,17 @@ double* analyze_signal(double* dp_filteredSignal, int i_signalSize, double d_not
     for (int i=2; i<i_signalSize; i++){
         dp_notchedSignal[i] = a0*dp_filteredSignal[i] + a1*dp_filteredSignal[i-1] + a2*dp_filteredSignal[i-2] - b1*dp_notchedSignal[i-1] - b2*dp_notchedSignal[i-2];
     }
-    dp_response[0] = dp_notchedSignal[i_signalSize-2];
-    dp_response[1] = dp_notchedSignal[i_signalSize-1];
+    dp_response[0] = dp_notchedSignal[int(i_signalSize*0.25)+0];
+    dp_response[1] = dp_notchedSignal[int(i_signalSize*0.25)+1];
+
+    // save values to file for testing and validation
+    string s_notchedSignalPath = "./res/cpp_notched_signal.txt";
+    ofstream fout1; 
+    fout1.open(s_notchedSignalPath, std::ofstream::out  | std::ofstream::app);
+    for (int i=0; i<i_signalSize*0.25; i++){
+        fout1 << dp_notchedSignal[i] << endl;
+    }
+    
     // Find power in the filtered signal (i.e. Power at 2 kHz)
     double notchedPower = 0;
 
@@ -118,8 +128,17 @@ double* analyze_signal(double* dp_filteredSignal, int i_signalSize, double d_not
     for (int i=2; i<i_signalSize; i++){
         dp_notchedSignal[i] = a0*dp_filteredSignal[i] + a1*dp_filteredSignal[i-1] + a2*dp_filteredSignal[i-2] - b1*dp_notchedSignal[i-1] - b2*dp_notchedSignal[i-2];
     }
-    dp_response[2] = dp_notchedSignal[i_signalSize-2];
-    dp_response[3] = dp_notchedSignal[i_signalSize-1];
+    dp_response[2] = dp_notchedSignal[int(i_signalSize*0.25)+0];
+    dp_response[3] = dp_notchedSignal[int(i_signalSize*0.25)+1];
+
+    // save values for testing and validation
+    string s_referenceSignalPath = "./res/cpp_reference_signal.txt";
+    ofstream fout2; 
+    fout2.open(s_referenceSignalPath, std::ofstream::out  | std::ofstream::app);
+    for (int i=0; i<i_signalSize*0.25; i++){
+        fout2 << dp_notchedSignal[i] << endl;
+    }
+
     // Find power in the reference notched signal (i.e. Power at 400 Hz)
     double notchedReferencePower = 0;
 
@@ -131,5 +150,8 @@ double* analyze_signal(double* dp_filteredSignal, int i_signalSize, double d_not
     double notchedReferenceRatio = notchedReferencePower / totalPower;
     double notchedToReferenceRatio = notchedPower/notchedReferencePower;
     dp_response[4] = (notchedToReferenceRatio >= d_threshhold);
+
+    // cout << dp_response[0] << dp_response[1] << dp_response[2] << dp_response[3] << dp_response[4] << endl;
+
     return dp_response;
 }
