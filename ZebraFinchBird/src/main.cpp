@@ -30,6 +30,9 @@ int ADC_VALUE = 0;
 float voltage_value = 0;
 String dataMessage;
 
+// Testing/Debugging parameters
+
+
 // NTP server to request epoch time
 const char* ntpServer = "pool.ntp.org";
 
@@ -168,9 +171,9 @@ void setup(){
     // int buffer1_tail = BUFFER_SIZE;
     // int buffer2_tail = BUFFER_SIZE;
 
-    // xTaskCreatePinnedToCore(ADC_Reader, "ADC Reader", 5000, NULL, 1, &ADCTask, 0);
+    xTaskCreatePinnedToCore(ADC_Reader, "ADC Reader", 5000, NULL, 1, &ADCTask, 0);
     
-    // xTaskCreatePinnedToCore(SD_Writer, "SD Writer", 5000, NULL, 1, &SDTask, 1);
+    xTaskCreatePinnedToCore(SD_Writer, "SD Writer", 5000, NULL, 1, &SDTask, 1);
     
 }
 
@@ -182,14 +185,15 @@ void ADC_Reader(void * pvParameters){
     for(;;){
         
         ADC_VALUE = analogRead(GPIO_pin);
+        // Get epoch time
+        epochTime = getTime();
         xTaskNotify(SDTask, 1, eIncrement);
     }
 }
 
 void SD_Writer(void * pvParameters){
 
-    // Get epoch time
-    // epochTime = getTime();
+    
 
     Serial.print("SD Writer");
     Serial.println(xPortGetCoreID());
@@ -204,5 +208,5 @@ void SD_Writer(void * pvParameters){
 }
 
 void loop(){
-    // Serial.println(epochTime*1000 + millis());
+
 }
