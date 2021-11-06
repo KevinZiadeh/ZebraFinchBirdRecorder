@@ -17,18 +17,18 @@ void SD_Writer(void * pvParameters);
 
 
 // Replace with your network credentials
-const char* ssid     = "SamsungTarek";
-const char* password = "kevinziadeh";
+const char* ssid     = "SamsungKevin";
+const char* password = "tareksoubra";
 
 // Timer variables
 unsigned long lastTime = 0;
 unsigned long timerDelay = 30000;
 
 // ADC Read and Save variables
-const int GPIO_pin= 4;
+const int GPIO_pin= 36; // This is pin A4
 int ADC_VALUE = 0;
 float voltage_value = 0;
-String dataMessage;
+String dataMessage = "";
 
 // Testing/Debugging parameters
 
@@ -101,39 +101,6 @@ bool initSDCard(){
     return true;
 }
 
-// // Write to the SD card
-// void writeFile(fs::FS &fs, const char * path, const char * message) {
-//   Serial.printf("Writing file: %s\n", path);
-
-//   File file = fs.open(path, FILE_WRITE);
-//   if(!file) {
-//     Serial.println("Failed to open file for writing");
-//     return;
-//   }
-//   if(file.print(message)) {
-//     Serial.println("File written");
-//   } else {
-//     Serial.println("Write failed");
-//   }
-//   file.close();
-// }
-
-// // Append data to the SD card
-// void appendFile(fs::FS &fs, const char * path, const char * message) {
-//   Serial.printf("Appending to file: %s\n", path);
-
-//   File file = fs.open(path, FILE_APPEND);
-//   if(!file) {
-//     Serial.println("Failed to open file for appending");
-//     return;
-//   }
-//   if(file.print(message)) {
-//     Serial.println("Message appended");
-//   } else {
-//     Serial.println("Append failed");
-//   }
-//   file.close();
-// }
 
 TaskHandle_t ADCTask;
 TaskHandle_t SDTask;
@@ -153,7 +120,7 @@ void setup(){
     if(!file) {
         Serial.println("File doesn't exist");
         Serial.println("Creating file...");
-        writeFile(SD, "/data.txt", "Epoch Time, ADC Values, Voltage \r\n");
+        writeFile(SD, "/data.txt", "Time, ADC Values, Voltage \r\n");
     }
     else {
         Serial.println("File already exists");  
@@ -173,40 +140,133 @@ void setup(){
 
     xTaskCreatePinnedToCore(ADC_Reader, "ADC Reader", 5000, NULL, 1, &ADCTask, 0);
     
-    xTaskCreatePinnedToCore(SD_Writer, "SD Writer", 5000, NULL, 1, &SDTask, 1);
+    xTaskCreatePinnedToCore(SD_Writer, "SD Writer", 15000, NULL, 1, &SDTask, 1);
+    // vTaskSuspend(SDTask);
     
 }
 
 void ADC_Reader(void * pvParameters){
     
-    Serial.print("ADC Reader");
-    Serial.println(xPortGetCoreID());
+    // Serial.print("ADC Reader ");
+    // Serial.println(xPortGetCoreID());
 
-    for(;;){
-        
+    while(1){
+        // 34 is pin A2
+        // int localRead = analogRead(34); 
+        // Serial.println(localRead);
+        // if(localRead == 0){
+        //     Serial.println("Exiting ADC");
+        //     SD.end();
+        //     return;
+        // }
         ADC_VALUE = analogRead(GPIO_pin);
         // Get epoch time
-        epochTime = getTime();
-        xTaskNotify(SDTask, 1, eIncrement);
+        // epochTime = getTime();
+        xTaskNotifyGive(SDTask);
+        vTaskDelay(pdMS_TO_TICKS(50));
+        // vTaskResume(SDTask);
     }
 }
 
-void SD_Writer(void * pvParameters){
+void SD_Writer(void * pvParameters){ 
 
-    
+    const TickType_t xMaxBlockTime = pdMS_TO_TICKS(100);
+    uint32_t ulNotificationValue;
 
-    Serial.print("SD Writer");
+    Serial.print("SD Writer ");
     Serial.println(xPortGetCoreID());
 
-    Serial.print("Voltage = ");
-    Serial.print(ADC_VALUE);
-    voltage_value = (ADC_VALUE * 3.3)/4096;
-    dataMessage = String((epochTime*1000 + millis())) + "," + String(ADC_VALUE) + "," + String(voltage_value, 16) + "\r\n";
-    appendFile(SD, "/data.txt", dataMessage.c_str());
+    while(1){
 
-    vTaskDelete(NULL);
+        ulNotificationValue = ulTaskNotifyTake(pdTRUE, xMaxBlockTime);
+        if (ulNotificationValue > 0){
+
+            // Serial.print("SD Writer ");
+            // Serial.println(xPortGetCoreID());
+
+            Serial.print("Voltage = ");
+            Serial.println(ADC_VALUE);
+            voltage_value = (ADC_VALUE * 3.3)/4096;
+            // dataMessage = String((epochTime*1000 + millis())) + "," + String(ADC_VALUE) + "," + String(voltage_value, 16) + "\r\n";
+            dataMessage = "Time, " + String(ADC_VALUE) + "," + String(voltage_value, 16) + "\r\n";
+            Serial.println(dataMessage);
+            appendFile(SD, "/data.txt", dataMessage.c_str());
+
+        }
+    }
 }
 
 void loop(){
-
 }
+
+////////////////////////////////////////////////////
+
+// int i = 0;
+// float data[6000];
+// int timeStamp[6000];
+// int initialMillis;
+
+
+// void setup(){
+
+//     Serial.begin(115200);
+//     Serial.println("Testing code beginning: \n");
+//     initSDCard();
+//     // initWifi();
+
+//     File file = SD.open("/data.txt");
+//     if(!file) {
+//         Serial.println("File doesn't exist");
+//         Serial.println("Creating file...");
+//         writeFile(SD, "/data.txt", "Epoch Time, ADC Values, Voltage \r\n");
+//     }
+//     else {
+//         Serial.println("File already exists");  
+//     }
+//     file.close();
+
+//     Serial.println(millis());
+//     initialMillis = millis();
+
+
+// }
+
+// void loop(){
+
+//     // pinValue = analogRead(26);
+//     // Serial.print("The Value on the GPIO Pin is: ");
+//     // Serial.println(pinValue);
+//     // delay(500);
+//     ADC_VALUE = analogRead(GPIO_pin);
+//     // delayMicroseconds(35);
+//     voltage_value = (ADC_VALUE * 3.3)/4096;
+//     data[i] = voltage_value;
+//     timeStamp[i] = millis();
+//     i++;
+//     if(i == 6000){
+//         Serial.println(i);
+//         for (int j = 0; j < 6000; j++){
+//             dataMessage += String(timeStamp[j] - initialMillis, 4) + "," + String(data[j], 6) + "|";
+//             Serial.println(dataMessage);
+//         }
+//         dataMessage += "Wrote to SD Card \n";
+//         // Serial.println(dataMessage);
+//         appendFile(SD, "/data.txt", dataMessage.c_str());
+//         dataMessage = "";
+//         // Serial.println(millis());
+//         i = 0;
+
+//     }
+//     // epochTime = getTime();
+
+//     // dataMessage = String(millis()) + "," + String(ADC_VALUE) + "," + String(voltage_value, 16) + "\r\n";
+//     // dataMessage = String((epochTime*1000 + millis())) + "," + String(ADC_VALUE) + "," + String(voltage_value, 16) + "\r\n";
+//     // appendFile(SD, "/data.txt", dataMessage.c_str());
+
+//     // if(pinValue < 5){
+//     // dataMessage =  "end of saving\r\n";
+//     // appendFile(SD, "/data.txt", dataMessage.c_str());
+//     //     Serial.println("Pin is pulled down, stop saving");
+//     // }
+
+// }
