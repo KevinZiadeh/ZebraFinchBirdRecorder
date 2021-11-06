@@ -10,10 +10,36 @@
 #include <WiFi.h>
 #include "time.h"
 
-#define BUFFER_SIZE 4096
+#define SINGLE_BUFFER_SIZE 1500
+#define COMPLETE_BUFFER_SIZE int(1.25*SINGLE_BUFFER_SIZE)
+#define THRESHOLD 7
 
 void ADC_Reader(void * pvParameters);
 void SD_Writer(void * pvParameters);
+
+// Global Variables
+double d_filteredPrev1 = 0; // before last element of previously filtered buffer
+double d_filteredPrev2 = 0; // last element of previously filtered buffer
+double u16_filteredPrev1 = 0; // before last element of previously filtered buffer
+double u16_filteredPrev2 = 0; // last element of previously filtered buffer
+double d_rawPrev1 = 0; // before last element of previous buffer before filtering
+double d_rawPrev2 = 0; // last element of previous buffer before filtering
+int i_vocalisationDetected = 0; // result of the analysis to decide if we want to save or not 
+int i_mergeState = 0; // selects if we need to merge current buffer with previous one: THREE STATES -> YES, YES/NO, NO. This is done in order to save instances together when there is only one buffer of difference of no
+int i_startCopyIndex = (int)((0.6*COMPLETE_BUFFER_SIZE+0.5)); // selects the beginning of the last 25% of the SINGLE BUFFER (which is 80% of the BUFFER)
+double* dp_filteredSignalAfterBuffer = (double *)malloc(sizeof(double)*262144); 
+int i_filteredSignalAfterBufferIndex = 0; 
+int b_startingIndex = false; 
+int d_notchedSignalPrev1 = 0;
+int d_notchedSignalPrev2 = 0;
+int d_notchedReferenceSignalPrev1 = 0;
+int d_notchedReferenceSignalPrev2 = 0;
+double* dp_audioBuffer = (double *)malloc(sizeof(double)*COMPLETE_BUFFER_SIZE); // Complete buffer allocated for double values 
+int i_buffer1Head = 0; // integer indicating the head of the first buffer
+int i_buffer2Head = 0.2*COMPLETE_BUFFER_SIZE; // integer indicating the head of the second buffer
+int i_buffer1Tail = 0.8*COMPLETE_BUFFER_SIZE; // integer indicating the tail of the first buffer
+int i_buffer2Tail = COMPLETE_BUFFER_SIZE; // integer indicating the tail of the second buffer
+int i_head = -1; // helper integer to specify head of buffer for filtering
 
 
 // Replace with your network credentials
@@ -149,30 +175,46 @@ void ADC_Reader(void * pvParameters){
     
     // Serial.print("ADC Reader ");
     // Serial.println(xPortGetCoreID());
-
+    int i_iter = 0; // iterator for the index of the buffer
+    
     while(1){
-        // 34 is pin A2
-        // int localRead = analogRead(34); 
-        // Serial.println(localRead);
-        // if(localRead == 0){
-        //     Serial.println("Exiting ADC");
-        //     SD.end();
-        //     return;
-        // }
+        // Reads data sequentially from array containing all the data -> simulates reading from ADC
+        // We lose a maximum of 0.2*COMPLETE_BUFFER_SIZE of data at the end
         ADC_VALUE = analogRead(GPIO_pin);
-        // Get epoch time
-        // epochTime = getTime();
-        xTaskNotifyGive(SDTask);
-        vTaskDelay(pdMS_TO_TICKS(50));
-        // vTaskResume(SDTask);
+        // Serial.print("Analog Value Read with i_iter = ");
+        // Serial.println(i_iter);
+        dp_audioBuffer[i_iter] = ADC_VALUE;
+        if (i_iter == i_buffer1Tail){ // when buffer 1 is full
+            i_head = i_buffer1Head;
+            i_buffer1Head = ((int)(i_buffer1Head+0.4*COMPLETE_BUFFER_SIZE)%(COMPLETE_BUFFER_SIZE+1)); // changes head position on the first buffer to start saving 50% later 
+            i_buffer1Tail = ((int)(i_buffer1Tail+0.4*COMPLETE_BUFFER_SIZE)%COMPLETE_BUFFER_SIZE); // changes tail position on the first buffer to end 50% later
+            // Serial.print("Filled B1: ");
+            // Serial.println(millis());
+            xTaskNotifyGive(SDTask);
+        }
+            
+        if (i_iter == i_buffer2Tail){ // when buffer 2 is full
+            i_head = i_buffer2Head;
+            i_buffer2Head = ((int)(i_buffer2Head+0.4*COMPLETE_BUFFER_SIZE)%(COMPLETE_BUFFER_SIZE+1)); // changes head position on the second buffer to start saving 50% later
+            i_buffer2Tail = ((int)(i_buffer2Tail+0.4*COMPLETE_BUFFER_SIZE)%COMPLETE_BUFFER_SIZE); // changes tail position on the second buffer to end 50% later
+            // Serial.print("Filled B2: ");
+            // Serial.println(millis());
+            xTaskNotifyGive(SDTask);
+        }
+        i_iter++;
+        i_iter = i_iter%(COMPLETE_BUFFER_SIZE+1);
+    
+        vTaskDelay(pdMS_TO_TICKS(1));
+        
     }
 }
 
 void SD_Writer(void * pvParameters){ 
 
-    const TickType_t xMaxBlockTime = pdMS_TO_TICKS(100);
+    const TickType_t xMaxBlockTime = pdMS_TO_TICKS(5);
     uint32_t ulNotificationValue;
 
+    Serial.println(i_head);
     Serial.print("SD Writer ");
     Serial.println(xPortGetCoreID());
 
@@ -180,18 +222,15 @@ void SD_Writer(void * pvParameters){
 
         ulNotificationValue = ulTaskNotifyTake(pdTRUE, xMaxBlockTime);
         if (ulNotificationValue > 0){
-
-            // Serial.print("SD Writer ");
-            // Serial.println(xPortGetCoreID());
-
-            Serial.print("Voltage = ");
-            Serial.println(ADC_VALUE);
-            voltage_value = (ADC_VALUE * 3.3)/4096;
-            // dataMessage = String((epochTime*1000 + millis())) + "," + String(ADC_VALUE) + "," + String(voltage_value, 16) + "\r\n";
-            dataMessage = "Time, " + String(ADC_VALUE) + "," + String(voltage_value, 16) + "\r\n";
-            Serial.println(dataMessage);
+            int i_startingIndex = (int)((b_startingIndex*0.6*COMPLETE_BUFFER_SIZE+0.5));
+            for(int i=i_startingIndex;i<SINGLE_BUFFER_SIZE;i++) {
+                voltage_value = (dp_audioBuffer[i+i_startingIndex] * 3.3)/4096;
+                dataMessage += String(millis()) + "," + String(dp_audioBuffer[i+i_startingIndex], 16) + "," +
+                String(voltage_value) + "\r\n";
+            }
+            b_startingIndex = true;
+            // Serial.println(dataMessage);
             appendFile(SD, "/data.txt", dataMessage.c_str());
-
         }
     }
 }
