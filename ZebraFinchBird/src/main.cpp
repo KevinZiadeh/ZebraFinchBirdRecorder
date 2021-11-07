@@ -225,8 +225,9 @@ void SD_Writer(void * pvParameters){
             int i_startingIndex = (int)((b_startingIndex*0.6*COMPLETE_BUFFER_SIZE+0.5));
             for(int i=i_startingIndex;i<SINGLE_BUFFER_SIZE;i++) {
                 voltage_value = (dp_audioBuffer[i+i_startingIndex] * 3.3)/4096;
-                dataMessage += String(millis()) + "," + String(dp_audioBuffer[i+i_startingIndex], 16) + "," +
-                String(voltage_value) + "\r\n";
+                // dataMessage += String(millis()) + "," + String(dp_audioBuffer[i+i_startingIndex], 16) + "," +
+                // String(voltage_value, 10) + "\r\n";
+                dataMessage += String(millis()) + "," + String(voltage_value, 8) + "\r\n";
             }
             b_startingIndex = true;
             // Serial.println(dataMessage);
