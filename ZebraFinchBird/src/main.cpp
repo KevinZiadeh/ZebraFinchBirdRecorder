@@ -10,8 +10,8 @@
 #include <WiFi.h>
 #include "time.h"
 
-#define SINGLE_BUFFER_SIZE 1500
-#define COMPLETE_BUFFER_SIZE int(1.25*SINGLE_BUFFER_SIZE)
+#define COMPLETE_BUFFER_SIZE 2815
+#define SINGLE_BUFFER_SIZE int(0.8*COMPLETE_BUFFER_SIZE)
 #define THRESHOLD 7
 
 void ADC_Reader(void * pvParameters);
@@ -29,7 +29,7 @@ int i_mergeState = 0; // selects if we need to merge current buffer with previou
 int i_startCopyIndex = (int)((0.6*COMPLETE_BUFFER_SIZE+0.5)); // selects the beginning of the last 25% of the SINGLE BUFFER (which is 80% of the BUFFER)
 double* dp_filteredSignalAfterBuffer = (double *)malloc(sizeof(double)*262144); 
 int i_filteredSignalAfterBufferIndex = 0; 
-int b_startingIndex = false; 
+int i_startingIndex = 0; 
 int d_notchedSignalPrev1 = 0;
 int d_notchedSignalPrev2 = 0;
 int d_notchedReferenceSignalPrev1 = 0;
@@ -40,7 +40,12 @@ int i_buffer2Head = 0.2*COMPLETE_BUFFER_SIZE; // integer indicating the head of 
 int i_buffer1Tail = 0.8*COMPLETE_BUFFER_SIZE; // integer indicating the tail of the first buffer
 int i_buffer2Tail = COMPLETE_BUFFER_SIZE; // integer indicating the tail of the second buffer
 int i_head = -1; // helper integer to specify head of buffer for filtering
+int fillTime = 0; // variable to carry time over from ADC Reader to SD Writer
+struct timeval rtosTime;
 
+uint32_t timeval_toMsecs(struct timeval a) {
+	return a.tv_sec * 1000000 + a.tv_usec;
+}
 
 // Replace with your network credentials
 const char* ssid     = "SamsungKevin";
@@ -188,8 +193,10 @@ void ADC_Reader(void * pvParameters){
             i_head = i_buffer1Head;
             i_buffer1Head = ((int)(i_buffer1Head+0.4*COMPLETE_BUFFER_SIZE)%(COMPLETE_BUFFER_SIZE+1)); // changes head position on the first buffer to start saving 50% later 
             i_buffer1Tail = ((int)(i_buffer1Tail+0.4*COMPLETE_BUFFER_SIZE)%COMPLETE_BUFFER_SIZE); // changes tail position on the first buffer to end 50% later
-            // Serial.print("Filled B1: ");
-            // Serial.println(millis());
+            Serial.print("Filled B1: ");
+            gettimeofday(&rtosTime, NULL);
+            Serial.println(timeval_toMsecs(rtosTime));
+            fillTime = timeval_toMsecs(rtosTime);
             xTaskNotifyGive(SDTask);
         }
             
@@ -197,13 +204,15 @@ void ADC_Reader(void * pvParameters){
             i_head = i_buffer2Head;
             i_buffer2Head = ((int)(i_buffer2Head+0.4*COMPLETE_BUFFER_SIZE)%(COMPLETE_BUFFER_SIZE+1)); // changes head position on the second buffer to start saving 50% later
             i_buffer2Tail = ((int)(i_buffer2Tail+0.4*COMPLETE_BUFFER_SIZE)%COMPLETE_BUFFER_SIZE); // changes tail position on the second buffer to end 50% later
-            // Serial.print("Filled B2: ");
-            // Serial.println(millis());
+            Serial.print("Filled B2: ");
+            gettimeofday(&rtosTime, NULL);
+            Serial.println(timeval_toMsecs(rtosTime));
+            fillTime = timeval_toMsecs(rtosTime);
             xTaskNotifyGive(SDTask);
         }
         i_iter++;
         i_iter = i_iter%(COMPLETE_BUFFER_SIZE+1);
-    
+
         vTaskDelay(pdMS_TO_TICKS(1));
         
     }
@@ -211,25 +220,28 @@ void ADC_Reader(void * pvParameters){
 
 void SD_Writer(void * pvParameters){ 
 
-    const TickType_t xMaxBlockTime = pdMS_TO_TICKS(5);
     uint32_t ulNotificationValue;
 
     Serial.println(i_head);
     Serial.print("SD Writer ");
     Serial.println(xPortGetCoreID());
-
     while(1){
 
-        ulNotificationValue = ulTaskNotifyTake(pdTRUE, xMaxBlockTime);
+        ulNotificationValue = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(0.5));
         if (ulNotificationValue > 0){
-            int i_startingIndex = (int)((b_startingIndex*0.6*COMPLETE_BUFFER_SIZE+0.5));
+            Serial.print("Filling SD at...");
+            Serial.println(fillTime);
+            int i_startingIndex = (int)((i_startingIndex*0.75*SINGLE_BUFFER_SIZE+0.5));
+            Serial.print("i_startingIndex: ");
+            Serial.println(i_startingIndex);
             for(int i=i_startingIndex;i<SINGLE_BUFFER_SIZE;i++) {
                 voltage_value = (dp_audioBuffer[i+i_startingIndex] * 3.3)/4096;
-                // dataMessage += String(millis()) + "," + String(dp_audioBuffer[i+i_startingIndex], 16) + "," +
+                // dataMessage += String(gettimeofday(&rtosTime, NULL)) + "," + String(dp_audioBuffer[i+i_startingIndex], 16) + "," +
                 // String(voltage_value, 10) + "\r\n";
-                dataMessage += String(millis()) + "," + String(voltage_value, 8) + "\r\n";
+                gettimeofday(&rtosTime, NULL);
+                dataMessage += String(timeval_toMsecs(rtosTime)) + "," + String(voltage_value, 16) + "\r\n";
             }
-            b_startingIndex = true;
+            i_startingIndex = 1;
             // Serial.println(dataMessage);
             appendFile(SD, "/data.txt", dataMessage.c_str());
         }
@@ -265,8 +277,8 @@ void loop(){
 //     }
 //     file.close();
 
-//     Serial.println(millis());
-//     initialMillis = millis();
+//     Serial.println(gettimeofday(&rtosTime, NULL));
+//     initialMillis = gettimeofday(&rtosTime, NULL);
 
 
 // }
@@ -281,7 +293,7 @@ void loop(){
 //     // delayMicroseconds(35);
 //     voltage_value = (ADC_VALUE * 3.3)/4096;
 //     data[i] = voltage_value;
-//     timeStamp[i] = millis();
+//     timeStamp[i] = gettimeofday(&rtosTime, NULL);
 //     i++;
 //     if(i == 6000){
 //         Serial.println(i);
@@ -293,14 +305,14 @@ void loop(){
 //         // Serial.println(dataMessage);
 //         appendFile(SD, "/data.txt", dataMessage.c_str());
 //         dataMessage = "";
-//         // Serial.println(millis());
+//         // Serial.println(gettimeofday(&rtosTime, NULL));
 //         i = 0;
 
 //     }
 //     // epochTime = getTime();
 
-//     // dataMessage = String(millis()) + "," + String(ADC_VALUE) + "," + String(voltage_value, 16) + "\r\n";
-//     // dataMessage = String((epochTime*1000 + millis())) + "," + String(ADC_VALUE) + "," + String(voltage_value, 16) + "\r\n";
+//     // dataMessage = String(gettimeofday(&rtosTime, NULL)) + "," + String(ADC_VALUE) + "," + String(voltage_value, 16) + "\r\n";
+//     // dataMessage = String((epochTime*1000 + gettimeofday(&rtosTime, NULL))) + "," + String(ADC_VALUE) + "," + String(voltage_value, 16) + "\r\n";
 //     // appendFile(SD, "/data.txt", dataMessage.c_str());
 
 //     // if(pinValue < 5){
