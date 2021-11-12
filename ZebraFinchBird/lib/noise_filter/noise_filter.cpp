@@ -44,7 +44,7 @@ float* analyze_signal(float* &pf_filteredSignal, int &i_signalSize, float &f_not
     // First step is to find the total power in the signal
     float totalPower = 0;
     float* pf_response = (float *)malloc(sizeof(float)*5); 
-    for (int i=0; i<i_signalSize; i++){s
+    for (int i=0; i<i_signalSize; i++){
         totalPower += pf_filteredSignal[i]*pf_filteredSignal[i];
     }
 
