@@ -5,6 +5,27 @@
 #include <stdint.h>
 #include <SD_handler.h>
 #include <noise_filter.h>
+// #include "freertos/semphr.h"
+
+// FreeRTOS ADC Reading stuff
+static const char command[] = "avg";              // Command
+static const uint16_t timer_divider = 80;          // Divide 80 MHz by this
+static const uint64_t timer_max_count = 167;  // Timer counts to this value
+static const uint32_t cli_delay = 1;             // ms delay
+enum { BUF_LEN = 10 };      // Number of elements in sample buffer
+enum { MSG_LEN = 100 };     // Max characters in message body
+enum { MSG_QUEUE_LEN = 5 }; // Number of slots in message queue
+enum { CMD_BUF_LEN = 255};  // Number of characters in command buffer
+
+
+// Message struct to wrap strings for queue
+typedef struct Message {
+  char body[MSG_LEN];
+} Message;
+
+// Globals
+static hw_timer_t *timer = NULL;
+
 
 // Libraries to get time from NTP Server
 #include <WiFi.h>
@@ -18,6 +39,10 @@ void ADC_Reader(void * pvParameters);
 void SD_Writer(void * pvParameters);
 
 // Global Variables
+
+TaskHandle_t ADCTask;
+TaskHandle_t SDTask;
+
 double d_filteredPrev1 = 0; // before last element of previously filtered buffer
 double d_filteredPrev2 = 0; // last element of previously filtered buffer
 double u16_filteredPrev1 = 0; // before last element of previously filtered buffer
@@ -29,7 +54,7 @@ int i_mergeState = 0; // selects if we need to merge current buffer with previou
 int i_startCopyIndex = (int)((0.6*COMPLETE_BUFFER_SIZE+0.5)); // selects the beginning of the last 25% of the SINGLE BUFFER (which is 80% of the BUFFER)
 double* dp_filteredSignalAfterBuffer = (double *)malloc(sizeof(double)*262144); 
 int i_filteredSignalAfterBufferIndex = 0; 
-int i_startingIndex = 0; 
+int i_startingIndexDecision = 0; 
 int d_notchedSignalPrev1 = 0;
 int d_notchedSignalPrev2 = 0;
 int d_notchedReferenceSignalPrev1 = 0;
@@ -83,16 +108,16 @@ unsigned long getTime() {
 }
 
 // Initialize WiFi
-void initWiFi() {
-  WiFi.mode(WIFI_STA);
-  WiFi.begin(ssid, password);
-  Serial.print("Connecting to WiFi ..");
-  while (WiFi.status() != WL_CONNECTED) {
-    Serial.print('.');
-    delay(1000);
-  }
-  Serial.println(WiFi.localIP());
-}
+// void initWiFi() {
+//   WiFi.mode(WIFI_STA);
+//   WiFi.begin(ssid, password);
+//   Serial.print("Connecting to WiFi ..");
+//   while (WiFi.status() != WL_CONNECTED) {
+//     Serial.print('.');
+//     delay(1000);
+//   }
+//   Serial.println(WiFi.localIP());
+// }
 
 // Initialize SD Card
 bool initSDCard(){
@@ -132,14 +157,64 @@ bool initSDCard(){
     return true;
 }
 
+// Interrupt Service Routines (ISRs)
 
-TaskHandle_t ADCTask;
-TaskHandle_t SDTask;
+// This function executes when timer reaches max (and resets)
+void IRAM_ATTR onTimer() {
+
+    Serial.println("ISR Called");
+
+    int i_iter = 0; // iterator for the index of the buffer
+    BaseType_t task_woken = pdFALSE;
+    
+    // Reads data sequentially from array containing all the data -> simulates reading from ADC
+    // We lose a maximum of 0.2*COMPLETE_BUFFER_SIZE of data at the end
+    dp_audioBuffer[i_iter] = analogRead(GPIO_pin);
+    Serial.println(i_iter);
+    if (i_iter == i_buffer1Tail){ // when buffer 1 is full
+        i_head = i_buffer1Head;
+        i_buffer1Head = ((int)(i_buffer1Head+0.4*COMPLETE_BUFFER_SIZE)%(COMPLETE_BUFFER_SIZE+1)); // changes head position on the first buffer to start saving 50% later 
+        i_buffer1Tail = ((int)(i_buffer1Tail+0.4*COMPLETE_BUFFER_SIZE)%COMPLETE_BUFFER_SIZE); // changes tail position on the first buffer to end 50% later
+        Serial.print("Filled B1: ");
+        gettimeofday(&rtosTime, NULL);
+        Serial.println(timeval_toMsecs(rtosTime));
+        fillTime = timeval_toMsecs(rtosTime);
+        vTaskNotifyGiveFromISR(SDTask, &task_woken);
+    }
+        
+    if (i_iter == i_buffer2Tail){ // when buffer 2 is full
+        i_head = i_buffer2Head;
+        i_buffer2Head = ((int)(i_buffer2Head+0.4*COMPLETE_BUFFER_SIZE)%(COMPLETE_BUFFER_SIZE+1)); // changes head position on the second buffer to start saving 50% later
+        i_buffer2Tail = ((int)(i_buffer2Tail+0.4*COMPLETE_BUFFER_SIZE)%COMPLETE_BUFFER_SIZE); // changes tail position on the second buffer to end 50% later
+        Serial.print("Filled B2: ");
+        gettimeofday(&rtosTime, NULL);
+        Serial.println(timeval_toMsecs(rtosTime));
+        fillTime = timeval_toMsecs(rtosTime);
+        vTaskNotifyGiveFromISR(SDTask, &task_woken);
+    }
+
+    i_iter++;
+    i_iter = i_iter%(COMPLETE_BUFFER_SIZE+1);
+
+    // Exit from ISR (ESP-IDF)
+    if (task_woken) {
+        portYIELD_FROM_ISR();
+    }
+
+    // Exit from ISR (Vanilla FreeRTOS)
+    // portYIELD_FROM_ISR(task_woken);
+
+}
+
+
 
 
 void setup(){
 
     Serial.begin(115200);
+    
+    // Wait a moment to start (so we don't miss Serial output)
+    vTaskDelay(1000 / portTICK_PERIOD_MS);
     
     // initWiFi();
     if (!initSDCard()) return;
@@ -169,51 +244,39 @@ void setup(){
     // int buffer1_tail = BUFFER_SIZE;
     // int buffer2_tail = BUFFER_SIZE;
 
-    xTaskCreatePinnedToCore(ADC_Reader, "ADC Reader", 5000, NULL, 1, &ADCTask, 0);
+    xTaskCreatePinnedToCore(ADC_Reader, "ADC Reader", 15000, NULL, 1, &ADCTask, 0);
     
     xTaskCreatePinnedToCore(SD_Writer, "SD Writer", 15000, NULL, 1, &SDTask, 1);
     // vTaskSuspend(SDTask);
+    
+    // Delete "setup and loop" task from core 1
+    vTaskDelete(NULL);
+
     
 }
 
 void ADC_Reader(void * pvParameters){
     
-    // Serial.print("ADC Reader ");
+    Serial.println("ADC Reader ");
     // Serial.println(xPortGetCoreID());
-    int i_iter = 0; // iterator for the index of the buffer
+    
+    // Message msg;
+
+    // Start a timer to run ISR every 167 microseconds
+    // %%% We move this here so it runsin core 0
+    timer = timerBegin(0, timer_divider, true); // Timer 0 runs at 80MHz, divider brings it down to 1MHz
+    timerAttachInterrupt(timer, &onTimer, true); // Attach timer 0 to the written ISR
+    timerAlarmWrite(timer, timer_max_count, true); // Reset timer every 167 times, or every 167us (6kHz)
+    timerAlarmEnable(timer); // Enable the timer
+    
     
     while(1){
-        // Reads data sequentially from array containing all the data -> simulates reading from ADC
-        // We lose a maximum of 0.2*COMPLETE_BUFFER_SIZE of data at the end
-        ADC_VALUE = analogRead(GPIO_pin);
-        // Serial.print("Analog Value Read with i_iter = ");
-        // Serial.println(i_iter);
-        dp_audioBuffer[i_iter] = ADC_VALUE;
-        if (i_iter == i_buffer1Tail){ // when buffer 1 is full
-            i_head = i_buffer1Head;
-            i_buffer1Head = ((int)(i_buffer1Head+0.4*COMPLETE_BUFFER_SIZE)%(COMPLETE_BUFFER_SIZE+1)); // changes head position on the first buffer to start saving 50% later 
-            i_buffer1Tail = ((int)(i_buffer1Tail+0.4*COMPLETE_BUFFER_SIZE)%COMPLETE_BUFFER_SIZE); // changes tail position on the first buffer to end 50% later
-            Serial.print("Filled B1: ");
-            gettimeofday(&rtosTime, NULL);
-            Serial.println(timeval_toMsecs(rtosTime));
-            fillTime = timeval_toMsecs(rtosTime);
-            xTaskNotifyGive(SDTask);
-        }
-            
-        if (i_iter == i_buffer2Tail){ // when buffer 2 is full
-            i_head = i_buffer2Head;
-            i_buffer2Head = ((int)(i_buffer2Head+0.4*COMPLETE_BUFFER_SIZE)%(COMPLETE_BUFFER_SIZE+1)); // changes head position on the second buffer to start saving 50% later
-            i_buffer2Tail = ((int)(i_buffer2Tail+0.4*COMPLETE_BUFFER_SIZE)%COMPLETE_BUFFER_SIZE); // changes tail position on the second buffer to end 50% later
-            Serial.print("Filled B2: ");
-            gettimeofday(&rtosTime, NULL);
-            Serial.println(timeval_toMsecs(rtosTime));
-            fillTime = timeval_toMsecs(rtosTime);
-            xTaskNotifyGive(SDTask);
-        }
-        i_iter++;
-        i_iter = i_iter%(COMPLETE_BUFFER_SIZE+1);
 
-        vTaskDelay(pdMS_TO_TICKS(1));
+        // Loops indefinitely, ADC Reading and saving being done in the ISR
+        
+        // vTaskDelay(pdMS_TO_TICKS(1));
+        vTaskDelay(cli_delay / portTICK_PERIOD_MS);
+
         
     }
 }
@@ -227,11 +290,11 @@ void SD_Writer(void * pvParameters){
     Serial.println(xPortGetCoreID());
     while(1){
 
-        ulNotificationValue = ulTaskNotifyTake(pdTRUE, pdMS_TO_TICKS(0.5));
+        ulNotificationValue = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
         if (ulNotificationValue > 0){
             Serial.print("Filling SD at...");
             Serial.println(fillTime);
-            int i_startingIndex = (int)((i_startingIndex*0.75*SINGLE_BUFFER_SIZE+0.5));
+            int i_startingIndex = (int)((i_startingIndexDecision*0.75*SINGLE_BUFFER_SIZE+0.5));
             Serial.print("i_startingIndex: ");
             Serial.println(i_startingIndex);
             for(int i=i_startingIndex;i<SINGLE_BUFFER_SIZE;i++) {
@@ -241,14 +304,15 @@ void SD_Writer(void * pvParameters){
                 gettimeofday(&rtosTime, NULL);
                 dataMessage += String(timeval_toMsecs(rtosTime)) + "," + String(voltage_value, 16) + "\r\n";
             }
-            i_startingIndex = 1;
+            i_startingIndexDecision = 1;
             // Serial.println(dataMessage);
             appendFile(SD, "/data.txt", dataMessage.c_str());
         }
     }
 }
 
-void loop(){
+void loop(){ // code should never reach here
+    Serial.println("I am in loop. I should not be here... ");
 }
 
 ////////////////////////////////////////////////////
