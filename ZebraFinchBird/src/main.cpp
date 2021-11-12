@@ -6,6 +6,10 @@
 #include <SD_handler.h>
 #include <noise_filter.h>
 // #include "freertos/semphr.h"
+#include "soc/rtc_wdt.h"
+#include "esp_int_wdt.h"
+#include "esp_task_wdt.h"
+
 
 // FreeRTOS ADC Reading stuff
 static const char command[] = "avg";              // Command
@@ -67,6 +71,7 @@ int i_buffer2Tail = COMPLETE_BUFFER_SIZE; // integer indicating the tail of the 
 int i_head = -1; // helper integer to specify head of buffer for filtering
 int fillTime = 0; // variable to carry time over from ADC Reader to SD Writer
 struct timeval rtosTime;
+int i_iter = 0; // iterator for the index of the buffer
 
 uint32_t timeval_toMsecs(struct timeval a) {
 	return a.tv_sec * 1000000 + a.tv_usec;
@@ -162,9 +167,13 @@ bool initSDCard(){
 // This function executes when timer reaches max (and resets)
 void IRAM_ATTR onTimer() {
 
-    Serial.println("ISR Called");
+    // rtc_wdt_protect_off();
+    // rtc_wdt_disable();
+    // disableCore0WDT();
+    // disableLoopWDT();
 
-    int i_iter = 0; // iterator for the index of the buffer
+    // Serial.println("ISR Called");
+
     BaseType_t task_woken = pdFALSE;
     
     // Reads data sequentially from array containing all the data -> simulates reading from ADC
@@ -196,6 +205,8 @@ void IRAM_ATTR onTimer() {
     i_iter++;
     i_iter = i_iter%(COMPLETE_BUFFER_SIZE+1);
 
+    // Serial.println("here");
+    // Serial.println(task_woken);
     // Exit from ISR (ESP-IDF)
     if (task_woken) {
         portYIELD_FROM_ISR();
@@ -206,14 +217,21 @@ void IRAM_ATTR onTimer() {
 }
 
 
-
-
 void setup(){
 
     Serial.begin(115200);
     
     // Wait a moment to start (so we don't miss Serial output)
     vTaskDelay(1000 / portTICK_PERIOD_MS);
+
+    esp_int_wdt_cpu_init();
+    esp_int_wdt_init();
+
+    rtc_wdt_protect_off();
+    rtc_wdt_disable();
+    disableCore0WDT();
+    disableLoopWDT();
+
     
     // initWiFi();
     if (!initSDCard()) return;
@@ -236,7 +254,7 @@ void setup(){
                             "ADC Reader", 
                             8192, 
                             NULL, 
-                            2, 
+                            1, 
                             &ADCTask, 
                             0);    
     xTaskCreatePinnedToCore(SD_Writer, 
@@ -255,6 +273,11 @@ void ADC_Reader(void * pvParameters){
     Serial.println("ADC Reader ");    
     Message msg;
 
+    // rtc_wdt_protect_off();
+    // rtc_wdt_disable();
+    // disableCore0WDT();
+    // disableLoopWDT();
+
     // Start a timer to run ISR every 167 microseconds
     // %%% We move this here so it runs in core 0
     timer = timerBegin(0, timer_divider, true); // Timer 0 runs at 80MHz, divider brings it down to 1MHz
@@ -267,6 +290,8 @@ void ADC_Reader(void * pvParameters){
         // Loops indefinitely, ADC Reading and saving being done in the ISR
         
         // vTaskDelay(pdMS_TO_TICKS(1));
+        // Serial.print("ADC -> ");
+        // Serial.println(i_iter);
         vTaskDelay(cli_delay / portTICK_PERIOD_MS);
 
         
@@ -280,6 +305,13 @@ void SD_Writer(void * pvParameters){
     Serial.println(i_head);
     Serial.print("SD Writer ");
     Serial.println(xPortGetCoreID());
+
+    
+    // rtc_wdt_protect_off();
+    // rtc_wdt_disable();
+    // disableCore0WDT();
+    // disableLoopWDT();
+
     while(1){
 
         ulNotificationValue = ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
@@ -300,6 +332,7 @@ void SD_Writer(void * pvParameters){
             // Serial.println(dataMessage);
             appendFile(SD, "/data.txt", dataMessage.c_str());
         }
+        // vTaskDelay(cli_delay / portTICK_PERIOD_MS);
     }
 }
 
