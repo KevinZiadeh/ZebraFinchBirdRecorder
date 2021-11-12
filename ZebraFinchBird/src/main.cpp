@@ -203,7 +203,6 @@ void IRAM_ATTR onTimer() {
 
     // Exit from ISR (Vanilla FreeRTOS)
     // portYIELD_FROM_ISR(task_woken);
-
 }
 
 
@@ -233,42 +232,35 @@ void setup(){
     }
     file.close();
     // epochTime = getTime();
-
-
-
-    // uint16_t* audioBuffer1 = (uint16_t *)malloc(2*BUFFER_SIZE);
-    // uint16_t* audioBuffer2 = (uint16_t *)malloc(2*BUFFER_SIZE);
-
-    // int buffer1_head = 0;
-    // int buffer2_head = 0;
-    // int buffer1_tail = BUFFER_SIZE;
-    // int buffer2_tail = BUFFER_SIZE;
-
-    xTaskCreatePinnedToCore(ADC_Reader, "ADC Reader", 15000, NULL, 1, &ADCTask, 0);
-    
-    xTaskCreatePinnedToCore(SD_Writer, "SD Writer", 15000, NULL, 1, &SDTask, 1);
-    // vTaskSuspend(SDTask);
-    
+    xTaskCreatePinnedToCore(ADC_Reader, 
+                            "ADC Reader", 
+                            8192, 
+                            NULL, 
+                            2, 
+                            &ADCTask, 
+                            0);    
+    xTaskCreatePinnedToCore(SD_Writer, 
+                            "SD Writer", 
+                            8192, 
+                            NULL, 
+                            1, 
+                            &SDTask, 
+                            1); 
     // Delete "setup and loop" task from core 1
-    vTaskDelete(NULL);
-
-    
+    vTaskDelete(NULL);    
 }
 
 void ADC_Reader(void * pvParameters){
     
-    Serial.println("ADC Reader ");
-    // Serial.println(xPortGetCoreID());
-    
-    // Message msg;
+    Serial.println("ADC Reader ");    
+    Message msg;
 
     // Start a timer to run ISR every 167 microseconds
-    // %%% We move this here so it runsin core 0
+    // %%% We move this here so it runs in core 0
     timer = timerBegin(0, timer_divider, true); // Timer 0 runs at 80MHz, divider brings it down to 1MHz
     timerAttachInterrupt(timer, &onTimer, true); // Attach timer 0 to the written ISR
     timerAlarmWrite(timer, timer_max_count, true); // Reset timer every 167 times, or every 167us (6kHz)
     timerAlarmEnable(timer); // Enable the timer
-    
     
     while(1){
 
