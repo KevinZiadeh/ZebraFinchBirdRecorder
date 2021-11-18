@@ -35,7 +35,8 @@ static hw_timer_t *timer = NULL;
 #include <WiFi.h>
 #include "time.h"
 
-#define COMPLETE_BUFFER_SIZE 2815
+// #define COMPLETE_BUFFER_SIZE 2815
+#define COMPLETE_BUFFER_SIZE 400
 #define SINGLE_BUFFER_SIZE int(0.8*COMPLETE_BUFFER_SIZE)
 #define THRESHOLD 7
 
@@ -86,7 +87,7 @@ unsigned long lastTime = 0;
 unsigned long timerDelay = 30000;
 
 // ADC Read and Save variables
-const int GPIO_pin= 36; // This is pin A4
+const int GPIO_pin = 36; // This is pin A4
 int ADC_VALUE = 0;
 float voltage_value = 0;
 String dataMessage = "";
