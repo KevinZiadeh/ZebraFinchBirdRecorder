@@ -10,21 +10,21 @@
 #include "esp_int_wdt.h"
 #include "esp_task_wdt.h"
 
-static const uint16_t timer_divider = 80;          // Divide 80 MHz by this
-static const uint64_t timer_max_count = 167;  // Timer counts to this value
-
-// Globals
-static hw_timer_t *timer = NULL;
-
+// Configuration Variables
 #define SINGLE_BUFFER_SIZE 6000
 #define COMPLETE_BUFFER_SIZE int(1.25*SINGLE_BUFFER_SIZE)
 #define THRESHOLD 7
 
+// Tasks definition
 void ADC_Reader(void * pvParameters);
-void SD_Writer(void * pvParameters);
+void Signal_Processing(void * pvParameters);
 
+// Global variables
 static TaskHandle_t ADCTask = NULL;
 static TaskHandle_t SDTask = NULL;
+static hw_timer_t *timer = NULL;
+static const uint16_t timer_divider = 80;      // Divide 80 MHz by this
+static const uint64_t timer_max_count = 167;  // Timer counts to this value
 double* dp_audioBuffer = (double *)malloc(sizeof(double)*COMPLETE_BUFFER_SIZE); // Complete buffer allocated for double values 
 int i_buffer1Head = 0; // integer indicating the head of the first buffer
 int i_buffer2Head = 0.2*COMPLETE_BUFFER_SIZE; // integer indicating the head of the second buffer
@@ -32,13 +32,13 @@ int i_buffer1Tail = 0.8*COMPLETE_BUFFER_SIZE; // integer indicating the tail of 
 int i_buffer2Tail = COMPLETE_BUFFER_SIZE; // integer indicating the tail of the second buffer
 int i_head = -1; // helper integer to specify head of buffer for filtering
 int i_iter = 0; // iterator for the index of the buffer
-int i_startingIndexDecision = 0;
+// int i_startingIndexDecision = 0;
+double d_filteredPrev1 = 0; // before last element of previously filtered buffer
+double d_filteredPrev2 = 0; // last element of previously filtered buffer
 
 // ADC Read and Save variables
-const int GPIO_pin = A4; // This is pin A4
-int ADC_VALUE = 0;
-float voltage_value = 0;
-String dataMessage = "";
+const int GPIO_pin = A4; // Pin to read accelerometer values from
+String dataMessage = ""; // String to save buffer values in before writing to SD card
 
 // Initialize SD Card
 bool initSDCard(){
@@ -125,22 +125,26 @@ void ADC_Reader(void *parameters) {
 }
 
 // Wait for semaphore and calculate average of ADC values
-void SD_Writer(void *parameters){
+void Signal_Processing(void *parameters){
 
     Serial.print("SD Writer on core ");
     Serial.println(xPortGetCoreID());
+    double* dp_bufferSignal = (double *)malloc(sizeof(double)*SINGLE_BUFFER_SIZE); // buffer to be analyzed
 
     while (1) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
         Serial.println(esp_timer_get_time());
 
-        int i_startingIndex = (int)((i_startingIndexDecision*0.75*SINGLE_BUFFER_SIZE+0.5));
-        for(int i=i_startingIndex;i<SINGLE_BUFFER_SIZE;i++) {
-            voltage_value = (dp_audioBuffer[i+i_startingIndex] * 3.3)/4096;
-            dataMessage += String(voltage_value, 16) + "\r\n";
-            // dataMessage += String(dp_audioBuffer[i+i_startingIndex]) + "\r\n";
+        // populate correct values starting from specified and looping back as if circular queue 
+        for (int i=0; i<SINGLE_BUFFER_SIZE;i++){
+            dp_bufferSignal[i] = dp_audioBuffer[(i_head+i)%(COMPLETE_BUFFER_SIZE+1)]; // implements circular queue
         }
-        i_startingIndexDecision = 1;
+        
+        // filter signal
+        double* dp_filteredSignal = filter_signal(dp_bufferSignal, SINGLE_BUFFER_SIZE, d_filteredPrev1, d_filteredPrev2); // filtered signal
+        d_filteredPrev1 = dp_filteredSignal[int(SINGLE_BUFFER_SIZE*0.25)+0];
+        d_filteredPrev2 = dp_filteredSignal[int(SINGLE_BUFFER_SIZE*0.25)+1];
+
         appendFile(SD, "/data.txt", dataMessage.c_str());
         dataMessage = "";
     }
@@ -172,7 +176,7 @@ void setup() {
                           &ADCTask,
                           0);
 
-  xTaskCreatePinnedToCore(SD_Writer,
+  xTaskCreatePinnedToCore(Signal_Processing,
                           "SD Writer",
                           4096,
                           NULL,

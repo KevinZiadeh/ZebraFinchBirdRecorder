@@ -20,24 +20,24 @@ float* filter_signal(uint16_t* &u16_bufferSignal, int &i_singleBufferSize, float
     return pf_filteredSignal;
 }
 
-float* filter_signal(float* &pf_bufferSignal, int &i_singleBufferSize, float &f_filterepfrev1, float &f_filterepfrev2){    
+double* filter_signal(double* &dp_bufferSignal, int i_singleBufferSize, double &d_filteredPrev1, double &d_filteredPrev2){    
     // coefficients used for the filtering. Online
-    float a0 = 0.8948577513857248;
-    float a1 = -1.7897155027714495;
-    float a2 = 0.8948577513857248;
-    float b1 = -1.7786300789392977;
-    float b2 = 0.8008009266036016;
+    double a0 = 0.8948577513857248;
+    double a1 = -1.7897155027714495;
+    double a2 = 0.8948577513857248;
+    double b1 = -1.7786300789392977;
+    double b2 = 0.8008009266036016;
 
-    float* pf_filteredSignal = (float*)malloc(sizeof(float)*i_singleBufferSize); // filtered buffer
+    double* dp_filteredSignal = (double*)malloc(sizeof(double)*i_singleBufferSize); // filtered buffer
     // Initial values set to 0
-    pf_filteredSignal[0] = f_filterepfrev1;
-    pf_filteredSignal[1] = f_filterepfrev2;
+    dp_filteredSignal[0] = d_filteredPrev1;
+    dp_filteredSignal[1] = d_filteredPrev2;
 
     for (int i=2; i<i_singleBufferSize; i++){
-        pf_filteredSignal[i] = a0*pf_bufferSignal[i] + a1*pf_bufferSignal[i-1] + a2*pf_bufferSignal[i-2] - b1*pf_filteredSignal[i-1] - b2*pf_filteredSignal[i-2];
+        dp_filteredSignal[i] = a0*dp_bufferSignal[i] + a1*dp_bufferSignal[i-1] + a2*dp_bufferSignal[i-2] - b1*dp_filteredSignal[i-1] - b2*dp_filteredSignal[i-2];
     }
 
-    return pf_filteredSignal;
+    return dp_filteredSignal;
 }
 
 float* analyze_signal(float* &pf_filteredSignal, int &i_signalSize, float &f_notchedSignalPrev1, float &f_notchedSignalPrev2, float &f_notchedReferenceSignalPrev1, float &f_notchedReferenceSignalPrev2, float &f_threshhold){    
