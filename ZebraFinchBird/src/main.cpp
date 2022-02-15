@@ -35,6 +35,11 @@ int i_iter = 0; // iterator for the index of the buffer
 // int i_startingIndexDecision = 0;
 double d_filteredPrev1 = 0; // before last element of previously filtered buffer
 double d_filteredPrev2 = 0; // last element of previously filtered buffer
+int i_vocalisationDetected = 0; // result of the analysis to decide if we want to save or not 
+double d_notchedSignalPrev1 = 0;
+double d_notchedSignalPrev2 = 0;
+double d_notchedReferenceSignalPrev1 = 0;
+double d_notchedReferenceSignalPrev2 = 0;
 
 // ADC Read and Save variables
 const int GPIO_pin = A4; // Pin to read accelerometer values from
@@ -144,6 +149,14 @@ void Signal_Processing(void *parameters){
         double* dp_filteredSignal = filter_signal(dp_bufferSignal, SINGLE_BUFFER_SIZE, d_filteredPrev1, d_filteredPrev2); // filtered signal
         d_filteredPrev1 = dp_filteredSignal[int(SINGLE_BUFFER_SIZE*0.25)+0];
         d_filteredPrev2 = dp_filteredSignal[int(SINGLE_BUFFER_SIZE*0.25)+1];
+
+        // analyse signal
+        double* dp_analysisResult = analyze_signal(dp_filteredSignal, SINGLE_BUFFER_SIZE, d_notchedSignalPrev1, d_notchedSignalPrev2, d_notchedReferenceSignalPrev1, d_notchedReferenceSignalPrev2, THRESHOLD);
+        i_vocalisationDetected = (int)dp_analysisResult[4];
+        d_notchedSignalPrev1 = dp_analysisResult[0];
+        d_notchedSignalPrev2 = dp_analysisResult[1]; 
+        d_notchedReferenceSignalPrev1 = dp_analysisResult[2];
+        d_notchedReferenceSignalPrev2 = dp_analysisResult[3];
 
         appendFile(SD, "/data.txt", dataMessage.c_str());
         dataMessage = "";
