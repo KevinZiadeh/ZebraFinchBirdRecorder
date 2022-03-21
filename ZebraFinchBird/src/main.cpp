@@ -45,6 +45,9 @@ double d_notchedReferenceSignalPrev2 = 0;
 const int GPIO_pin = A4; // Pin to read accelerometer values from
 String dataMessage = ""; // String to save buffer values in before writing to SD card
 
+// Wifi
+// https://github.com/KevinZiadeh/ZebraFinchBirdRecorder/blob/24dad2a5d823cd3f44416282a28f34bf3334099c/ZebraFinchBird/src/main.cpp
+
 // Initialize SD Card
 bool initSDCard(){
     uint8_t retries = 50;
@@ -92,7 +95,6 @@ static const int adc_pin = A0;
 void IRAM_ATTR onTimer() {
 
     BaseType_t task_woken = pdFALSE;
-
     dp_audioBuffer[i_iter] = analogRead(adc_pin);
     if (i_iter == i_buffer1Tail){ // when buffer 1 is full
         i_head = i_buffer1Head;
@@ -129,6 +131,13 @@ void ADC_Reader(void *parameters) {
   }
 }
 
+double* dp_filteredSignal = (double*)malloc(sizeof(double)*SINGLE_BUFFER_SIZE);
+// filter signal        
+double a0 = 0.8948577513857248;
+double a1 = -1.7897155027714495;
+double a2 = 0.8948577513857248;
+double b1 = -1.7786300789392977;
+double b2 = 0.8008009266036016;
 // Wait for semaphore and calculate average of ADC values
 void Signal_Processing(void *parameters){
 
@@ -145,21 +154,15 @@ void Signal_Processing(void *parameters){
             dp_bufferSignal[i] = dp_audioBuffer[(i_head+i)%(COMPLETE_BUFFER_SIZE+1)]; // implements circular queue
         }
         
-        // filter signal
-        double* dp_filteredSignal = filter_signal(dp_bufferSignal, SINGLE_BUFFER_SIZE, d_filteredPrev1, d_filteredPrev2); // filtered signal
+        // Filter Signal
+        dp_filteredSignal[0] = d_filteredPrev1;
+        dp_filteredSignal[1] = d_filteredPrev2;
+        for (int i=2; i<SINGLE_BUFFER_SIZE; i++){
+            dp_filteredSignal[i] = a0*dp_bufferSignal[i] + a1*dp_bufferSignal[i-1] + a2*dp_bufferSignal[i-2] - b1*dp_filteredSignal[i-1] - b2*dp_filteredSignal[i-2];
+        }
         d_filteredPrev1 = dp_filteredSignal[int(SINGLE_BUFFER_SIZE*0.25)+0];
         d_filteredPrev2 = dp_filteredSignal[int(SINGLE_BUFFER_SIZE*0.25)+1];
-
-        // analyse signal
-        double* dp_analysisResult = analyze_signal(dp_filteredSignal, SINGLE_BUFFER_SIZE, d_notchedSignalPrev1, d_notchedSignalPrev2, d_notchedReferenceSignalPrev1, d_notchedReferenceSignalPrev2, THRESHOLD);
-        i_vocalisationDetected = (int)dp_analysisResult[4];
-        d_notchedSignalPrev1 = dp_analysisResult[0];
-        d_notchedSignalPrev2 = dp_analysisResult[1]; 
-        d_notchedReferenceSignalPrev1 = dp_analysisResult[2];
-        d_notchedReferenceSignalPrev2 = dp_analysisResult[3];
-
-        appendFile(SD, "/data.txt", dataMessage.c_str());
-        dataMessage = "";
+        Serial.println("Filtering Done");
     }
 }
 
@@ -191,7 +194,7 @@ void setup() {
 
   xTaskCreatePinnedToCore(Signal_Processing,
                           "SD Writer",
-                          4096,
+                          20000,
                           NULL,
                           2,
                           &SDTask,
