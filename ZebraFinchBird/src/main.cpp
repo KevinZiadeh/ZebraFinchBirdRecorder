@@ -10,6 +10,10 @@
 #include "esp_int_wdt.h"
 #include "esp_task_wdt.h"
 
+// // Libraries to get time from NTP Server
+// #include <WiFi.h>
+// #include "time.h"
+
 // Configuration Variables
 #define SINGLE_BUFFER_SIZE 6000
 #define COMPLETE_BUFFER_SIZE int(1.25*SINGLE_BUFFER_SIZE)
@@ -44,8 +48,28 @@ double d_notchedReferenceSignalPrev2 = 0;
 // ADC Read and Save variables
 const int GPIO_pin = A4; // Pin to read accelerometer values from
 
-// Wifi
-// https://github.com/KevinZiadeh/ZebraFinchBirdRecorder/blob/24dad2a5d823cd3f44416282a28f34bf3334099c/ZebraFinchBird/src/main.cpp
+// // Wifi
+// // Replace with your network credentials
+// const char *ssid = "";
+// const char *password = "";
+// const char *ntpServer = "pool.ntp.org"; // NTP server to request epoch time
+// long epochTime; // Variable to save current epoch time
+
+// Pins
+static const int adc_pin = A4;  // PIN from which we read the ADC value. Cannot use ADC2 with WIFI
+
+// // Initialize WiFi
+// void initWiFi(){
+//     WiFi.mode(WIFI_STA);
+//     WiFi.begin(ssid, password);
+//     Serial.print("Connecting to WiFi ..");
+//     while (WiFi.status() != WL_CONNECTED)
+//     {
+//         Serial.print('.');
+//         delay(1000);
+//     }
+//     Serial.println(WiFi.localIP());
+// }
 
 // Initialize SD Card
 bool initSDCard(){
@@ -85,11 +109,28 @@ bool initSDCard(){
     return true;
 }
 
-static const BaseType_t pro_cpu = 0;
-static const BaseType_t app_cpu = 1;
+long getTime(){
+    time_t now;
+    struct tm timeinfo;
+    if (!getLocalTime(&timeinfo))
+    {
+        // Serial.println("Failed to obtain time");
+        return (0);
+    }
+    time(&now);
+    return now;
+}
 
-// Pins
-static const int adc_pin = A0;
+void uint64_to_string(uint64_t value, String& result ) {
+    result.clear();
+    result.reserve( 20 ); // max. 20 digits possible
+    uint64_t q = value;
+    do {
+        result += "0123456789"[ q % 10 ];
+        q /= 10;
+    } while ( q );
+    std::reverse( result.begin(), result.end() );
+}
 
 void IRAM_ATTR onTimer() {
 
@@ -118,8 +159,7 @@ void IRAM_ATTR onTimer() {
 
 void ADC_Reader(void *parameters) {
 
-    Serial.print("ADC Reader on core ");
-    Serial.println(xPortGetCoreID());
+    Serial.println("ADC Reader");
 
     timer = timerBegin(0, timer_divider, true);
     timerAttachInterrupt(timer, &onTimer, true);
@@ -128,17 +168,6 @@ void ADC_Reader(void *parameters) {
     while (1) {
     vTaskDelay(1 / portTICK_PERIOD_MS);
   }
-}
-
-void uint64_to_string(uint64_t value, String& result ) {
-    result.clear();
-    result.reserve( 20 ); // max. 20 digits possible
-    uint64_t q = value;
-    do {
-        result += "0123456789"[ q % 10 ];
-        q /= 10;
-    } while ( q );
-    std::reverse( result.begin(), result.end() );
 }
 
 // Wait for semaphore and calculate average of ADC values
@@ -168,7 +197,8 @@ void Signal_Processing(void *parameters){
 
     while (1) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
-        uint64_to_string(esp_timer_get_time(), s_FileName);
+        uint64_to_string(esp_timer_get_time(), s_FileName);        
+        // uint64_to_string((epochTime*1000000 + esp_timer_get_time()), s_FileName);        
         Serial.println(s_FileName);
         // populate correct values starting from specified and looping back as if circular queue 
         for (int i=0; i<SINGLE_BUFFER_SIZE;i++){
@@ -200,7 +230,6 @@ void Signal_Processing(void *parameters){
         a2 = -0.3444719716111889;
         b1 = 0.8772677342420642;
         b2 = 0.3110560567776222;
-        Serial.println("Total Power Computed");
         dp_notchedSignal[0] = d_notchedSignalPrev1;
         dp_notchedSignal[1] = d_notchedSignalPrev2;
         for (int i=2; i<SINGLE_BUFFER_SIZE; i++){
@@ -264,18 +293,14 @@ void setup() {
     Serial.begin(115200);
 
     vTaskDelay(1000 / portTICK_PERIOD_MS);
+    
+    // https://esp32.com/viewtopic.php?t=5492
+    // initWiFi();
+    // configTime(0, 0, ntpServer);
+    // epochTime = getTime();
+    // WiFi.disconnect();
 
     if (!initSDCard()) return;
-    // File file = SD.open("/data.txt");
-    // if(!file) {
-    //     Serial.println("File doesn't exist");
-    //     Serial.println("Creating file...");
-    //     writeFile(SD, "/data.txt", "Voltage \r\n");
-    // }
-    // else {
-    //     Serial.println("File already exists");  
-    // }
-    // file.close();
 
   xTaskCreatePinnedToCore(ADC_Reader,
                           "ADC Reader",
