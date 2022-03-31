@@ -46,7 +46,7 @@ double d_notchedReferenceSignalPrev1 = 0;
 double d_notchedReferenceSignalPrev2 = 0;
 
 // ADC Read and Save variables
-const int GPIO_pin = A4; // Pin to read accelerometer values from
+const int ADC_GPIO_pin = A4; // Pin to read accelerometer values from
 
 // // Wifi
 // // Replace with your network credentials
@@ -54,9 +54,6 @@ const int GPIO_pin = A4; // Pin to read accelerometer values from
 // const char *password = "";
 // const char *ntpServer = "pool.ntp.org"; // NTP server to request epoch time
 // long epochTime; // Variable to save current epoch time
-
-// Pins
-static const int adc_pin = A4;  // PIN from which we read the ADC value. Cannot use ADC2 with WIFI
 
 // // Initialize WiFi
 // void initWiFi(){
@@ -135,7 +132,7 @@ void uint64_to_string(uint64_t value, String& result ) {
 void IRAM_ATTR onTimer() {
 
     BaseType_t task_woken = pdFALSE;
-    dp_audioBuffer[i_iter] = analogRead(adc_pin);
+    dp_audioBuffer[i_iter] = analogRead(ADC_GPIO_pin);
     if (i_iter == i_buffer1Tail){ // when buffer 1 is full
         i_head = i_buffer1Head;
         i_buffer1Head = ((int)(i_buffer1Head+0.4*COMPLETE_BUFFER_SIZE)%(COMPLETE_BUFFER_SIZE+1)); // changes head position on the first buffer to start saving 50% later 
