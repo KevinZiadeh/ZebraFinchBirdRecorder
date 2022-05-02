@@ -195,67 +195,68 @@ void Signal_Processing(void *parameters){
     while (1) {
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
         uint64_to_string(esp_timer_get_time(), s_FileName);        
-        // uint64_to_string((epochTime*1000000 + esp_timer_get_time()), s_FileName);        
+        // uint64_to_string((epochTime*1000000 + esp_timer_get_time()), s_FileName);   
+        Serial.println(s_FileName);
         // populate correct values starting from specified and looping back as if circular queue 
         for (int i=0; i<SINGLE_BUFFER_SIZE;i++){
             dp_bufferSignal[i] = dp_audioBuffer[(i_head+i)%(COMPLETE_BUFFER_SIZE+1)]; // implements circular queue
         }
         
         // Filter Signal
-        a0 = 0.8948577513857248;
-        a1 = -1.7897155027714495;
-        a2 = 0.8948577513857248;
-        b1 = -1.7786300789392977;
-        b2 = 0.8008009266036016;
-        dp_filteredSignal[0] = d_filteredPrev1;
-        dp_filteredSignal[1] = d_filteredPrev2;
-        for (int i=2; i<SINGLE_BUFFER_SIZE; i++){
-            dp_filteredSignal[i] = a0*dp_bufferSignal[i] + a1*dp_bufferSignal[i-1] + a2*dp_bufferSignal[i-2] - b1*dp_filteredSignal[i-1] - b2*dp_filteredSignal[i-2];
-        }
-        d_filteredPrev1 = dp_filteredSignal[int(SINGLE_BUFFER_SIZE*0.25)+0];
-        d_filteredPrev2 = dp_filteredSignal[int(SINGLE_BUFFER_SIZE*0.25)+1];
+        // a0 = 0.8948577513857248;
+        // a1 = -1.7897155027714495;
+        // a2 = 0.8948577513857248;
+        // b1 = -1.7786300789392977;
+        // b2 = 0.8008009266036016;
+        // dp_filteredSignal[0] = d_filteredPrev1;
+        // dp_filteredSignal[1] = d_filteredPrev2;
+        // for (int i=2; i<SINGLE_BUFFER_SIZE; i++){
+        //     dp_filteredSignal[i] = a0*dp_bufferSignal[i] + a1*dp_bufferSignal[i-1] + a2*dp_bufferSignal[i-2] - b1*dp_filteredSignal[i-1] - b2*dp_filteredSignal[i-2];
+        // }
+        // d_filteredPrev1 = dp_filteredSignal[int(SINGLE_BUFFER_SIZE*0.25)+0];
+        // d_filteredPrev2 = dp_filteredSignal[int(SINGLE_BUFFER_SIZE*0.25)+1];
 
-        // Analyze Signal
-        d_totalPower = 0;
-        for (int i=0; i<SINGLE_BUFFER_SIZE; i++){
-            d_totalPower += dp_filteredSignal[i]*dp_filteredSignal[i];
-        }    
-        a0 = 0.3444719716111889;
-        a1 = 0;
-        a2 = -0.3444719716111889;
-        b1 = 0.8772677342420642;
-        b2 = 0.3110560567776222;
-        dp_notchedSignal[0] = d_notchedSignalPrev1;
-        dp_notchedSignal[1] = d_notchedSignalPrev2;
-        for (int i=2; i<SINGLE_BUFFER_SIZE; i++){
-            dp_notchedSignal[i] = a0*dp_filteredSignal[i] + a1*dp_filteredSignal[i-1] + a2*dp_filteredSignal[i-2] - b1*dp_notchedSignal[i-1] - b2*dp_notchedSignal[i-2];
-        }
-        d_notchedSignalPrev1 = dp_notchedSignal[int(SINGLE_BUFFER_SIZE*0.25)+0];
-        d_notchedSignalPrev2 = dp_notchedSignal[int(SINGLE_BUFFER_SIZE*0.25)+1];
-        d_notchedPower = 0;
-        for (int i=0; i<SINGLE_BUFFER_SIZE; i++){
-            d_notchedPower += dp_notchedSignal[i]*dp_notchedSignal[i];
-        }
+        // // Analyze Signal
+        // d_totalPower = 0;
+        // for (int i=0; i<SINGLE_BUFFER_SIZE; i++){
+        //     d_totalPower += dp_filteredSignal[i]*dp_filteredSignal[i];
+        // }    
+        // a0 = 0.3444719716111889;
+        // a1 = 0;
+        // a2 = -0.3444719716111889;
+        // b1 = 0.8772677342420642;
+        // b2 = 0.3110560567776222;
+        // dp_notchedSignal[0] = d_notchedSignalPrev1;
+        // dp_notchedSignal[1] = d_notchedSignalPrev2;
+        // for (int i=2; i<SINGLE_BUFFER_SIZE; i++){
+        //     dp_notchedSignal[i] = a0*dp_filteredSignal[i] + a1*dp_filteredSignal[i-1] + a2*dp_filteredSignal[i-2] - b1*dp_notchedSignal[i-1] - b2*dp_notchedSignal[i-2];
+        // }
+        // d_notchedSignalPrev1 = dp_notchedSignal[int(SINGLE_BUFFER_SIZE*0.25)+0];
+        // d_notchedSignalPrev2 = dp_notchedSignal[int(SINGLE_BUFFER_SIZE*0.25)+1];
+        // d_notchedPower = 0;
+        // for (int i=0; i<SINGLE_BUFFER_SIZE; i++){
+        //     d_notchedPower += dp_notchedSignal[i]*dp_notchedSignal[i];
+        // }
 
-        a0 = 0.22336671878312517;
-        a1 = 0;
-        a2 = -0.22336671878312517;
-        b1 = -1.4189796126194893;
-        b2 = 0.5532665624337496;
-        dp_notchedSignal[0] = d_notchedReferenceSignalPrev1;
-        dp_notchedSignal[1] = d_notchedReferenceSignalPrev2;
-        for (int i=2; i<SINGLE_BUFFER_SIZE; i++){
-            dp_notchedSignal[i] = a0*dp_filteredSignal[i] + a1*dp_filteredSignal[i-1] + a2*dp_filteredSignal[i-2] - b1*dp_notchedSignal[i-1] - b2*dp_notchedSignal[i-2];
-        }
-        d_notchedReferenceSignalPrev1 = dp_notchedSignal[int(SINGLE_BUFFER_SIZE*0.25)+0];
-        d_notchedReferenceSignalPrev2 = dp_notchedSignal[int(SINGLE_BUFFER_SIZE*0.25)+1];
-        d_notchedReferencePower = 0;
-        for (int i=0; i<SINGLE_BUFFER_SIZE; i++){
-            d_notchedReferencePower += dp_notchedSignal[i]*dp_notchedSignal[i];
-        }
-        b_vocalisation_detected = (d_notchedPower/d_notchedReferencePower >= THRESHOLD);
+        // a0 = 0.22336671878312517;
+        // a1 = 0;
+        // a2 = -0.22336671878312517;
+        // b1 = -1.4189796126194893;
+        // b2 = 0.5532665624337496;
+        // dp_notchedSignal[0] = d_notchedReferenceSignalPrev1;
+        // dp_notchedSignal[1] = d_notchedReferenceSignalPrev2;
+        // for (int i=2; i<SINGLE_BUFFER_SIZE; i++){
+        //     dp_notchedSignal[i] = a0*dp_filteredSignal[i] + a1*dp_filteredSignal[i-1] + a2*dp_filteredSignal[i-2] - b1*dp_notchedSignal[i-1] - b2*dp_notchedSignal[i-2];
+        // }
+        // d_notchedReferenceSignalPrev1 = dp_notchedSignal[int(SINGLE_BUFFER_SIZE*0.25)+0];
+        // d_notchedReferenceSignalPrev2 = dp_notchedSignal[int(SINGLE_BUFFER_SIZE*0.25)+1];
+        // d_notchedReferencePower = 0;
+        // for (int i=0; i<SINGLE_BUFFER_SIZE; i++){
+        //     d_notchedReferencePower += dp_notchedSignal[i]*dp_notchedSignal[i];
+        // }
+        // b_vocalisation_detected = (d_notchedPower/d_notchedReferencePower >= THRESHOLD);
 
-        Serial.println(d_notchedPower/d_notchedReferencePower);
+        // Serial.println(d_notchedPower/d_notchedReferencePower);
     
         // Saving to SD card
         // if (b_vocalisation_detected == 1){
@@ -263,7 +264,7 @@ void Signal_Processing(void *parameters){
             if (i_mergeState == 0){
                 for(int i=0;i<(0.25*SINGLE_BUFFER_SIZE);i++) {
                     voltage_value = (dp_bufferSignal[i] * 3.3)/4096;
-                    dataMessage += String(voltage_value, 16) + " " + String(((dp_filteredSignal[i] * 3.3)/4096), 16) + "\r\n";
+                    dataMessage += String(voltage_value, 16) + "\r\n";
                 }
                 writeFile(SD, ("/"+s_FileName+".txt").c_str(), dataMessage.c_str());
                 dataMessage = "";
@@ -273,7 +274,7 @@ void Signal_Processing(void *parameters){
             else{
                 for(int i=0;i<(0.25*SINGLE_BUFFER_SIZE);i++) {
                     voltage_value = (dp_bufferSignal[i] * 3.3)/4096;
-                    dataMessage += String(voltage_value, 16) + " " + String(((dp_filteredSignal[i] * 3.3)/4096), 16) + "\r\n";
+                    dataMessage += String(voltage_value, 16) + "\r\n";
                 }
                 appendFile(SD, ("/"+s_prevFileName+".txt").c_str(), dataMessage.c_str());
                 dataMessage = "";

@@ -75,7 +75,7 @@ void writeFile(fs::FS &fs, const char * path, const char * message){
         return;
     }
     if(file.print(message)){
-        Serial.println("File written");
+        // Serial.println("File written");
     } else {
         Serial.println("Write failed");
     }
@@ -91,7 +91,7 @@ void appendFile(fs::FS &fs, const char * path, const char * message){
         return;
     }
     if(file.print(message)){
-        Serial.println("Message appended");
+        // Serial.println("Message appended");
     } else {
         Serial.println("Append failed");
     }
