@@ -46,7 +46,7 @@ double d_notchedReferenceSignalPrev1 = 0;
 double d_notchedReferenceSignalPrev2 = 0;
 
 // ADC Read and Save variables
-const int ADC_GPIO_pin = A4; // Pin to read accelerometer values from
+const int ADC_GPIO_pin = A5; // Pin to read accelerometer values from
 
 // // Wifi
 // // Replace with your network credentials
@@ -156,7 +156,7 @@ void IRAM_ATTR onTimer() {
 
 void ADC_Reader(void *parameters) {
 
-    Serial.println("ADC Reader");
+    // Serial.println("ADC Reader");
 
     timer = timerBegin(0, timer_divider, true);
     timerAttachInterrupt(timer, &onTimer, true);
@@ -169,7 +169,7 @@ void ADC_Reader(void *parameters) {
 
 // Wait for semaphore and calculate average of ADC values
 void Signal_Processing(void *parameters){
-    Serial.println("SD Writer");
+    // Serial.println("SD Writer");
     // filter signal        
     double a0 = 0;
     double a1 = 0;
@@ -178,7 +178,7 @@ void Signal_Processing(void *parameters){
     double b2 = 0;
     // analyze signal
     double d_totalPower = 0;
-    double notchedPower = 0;
+    double d_notchedPower = 0;
     double d_notchedReferencePower = 0;
     bool b_vocalisation_detected = false;
     // saving to sd card
@@ -196,7 +196,6 @@ void Signal_Processing(void *parameters){
         ulTaskNotifyTake(pdTRUE, portMAX_DELAY);
         uint64_to_string(esp_timer_get_time(), s_FileName);        
         // uint64_to_string((epochTime*1000000 + esp_timer_get_time()), s_FileName);        
-        Serial.println(s_FileName);
         // populate correct values starting from specified and looping back as if circular queue 
         for (int i=0; i<SINGLE_BUFFER_SIZE;i++){
             dp_bufferSignal[i] = dp_audioBuffer[(i_head+i)%(COMPLETE_BUFFER_SIZE+1)]; // implements circular queue
@@ -215,7 +214,6 @@ void Signal_Processing(void *parameters){
         }
         d_filteredPrev1 = dp_filteredSignal[int(SINGLE_BUFFER_SIZE*0.25)+0];
         d_filteredPrev2 = dp_filteredSignal[int(SINGLE_BUFFER_SIZE*0.25)+1];
-        Serial.println("Filtering Done");
 
         // Analyze Signal
         d_totalPower = 0;
@@ -230,13 +228,13 @@ void Signal_Processing(void *parameters){
         dp_notchedSignal[0] = d_notchedSignalPrev1;
         dp_notchedSignal[1] = d_notchedSignalPrev2;
         for (int i=2; i<SINGLE_BUFFER_SIZE; i++){
-            dp_notchedSignal[i] = a0*dp_notchedSignal[i] + a1*dp_notchedSignal[i-1] + a2*dp_notchedSignal[i-2] - b1*dp_notchedSignal[i-1] - b2*dp_notchedSignal[i-2];
+            dp_notchedSignal[i] = a0*dp_filteredSignal[i] + a1*dp_filteredSignal[i-1] + a2*dp_filteredSignal[i-2] - b1*dp_notchedSignal[i-1] - b2*dp_notchedSignal[i-2];
         }
         d_notchedSignalPrev1 = dp_notchedSignal[int(SINGLE_BUFFER_SIZE*0.25)+0];
         d_notchedSignalPrev2 = dp_notchedSignal[int(SINGLE_BUFFER_SIZE*0.25)+1];
-        notchedPower = 0;
+        d_notchedPower = 0;
         for (int i=0; i<SINGLE_BUFFER_SIZE; i++){
-            notchedPower += dp_notchedSignal[i]*dp_notchedSignal[i];
+            d_notchedPower += dp_notchedSignal[i]*dp_notchedSignal[i];
         }
 
         a0 = 0.22336671878312517;
@@ -247,7 +245,7 @@ void Signal_Processing(void *parameters){
         dp_notchedSignal[0] = d_notchedReferenceSignalPrev1;
         dp_notchedSignal[1] = d_notchedReferenceSignalPrev2;
         for (int i=2; i<SINGLE_BUFFER_SIZE; i++){
-            dp_notchedSignal[i] = a0*dp_notchedSignal[i] + a1*dp_notchedSignal[i-1] + a2*dp_notchedSignal[i-2] - b1*dp_notchedSignal[i-1] - b2*dp_notchedSignal[i-2];
+            dp_notchedSignal[i] = a0*dp_filteredSignal[i] + a1*dp_filteredSignal[i-1] + a2*dp_filteredSignal[i-2] - b1*dp_notchedSignal[i-1] - b2*dp_notchedSignal[i-2];
         }
         d_notchedReferenceSignalPrev1 = dp_notchedSignal[int(SINGLE_BUFFER_SIZE*0.25)+0];
         d_notchedReferenceSignalPrev2 = dp_notchedSignal[int(SINGLE_BUFFER_SIZE*0.25)+1];
@@ -255,15 +253,17 @@ void Signal_Processing(void *parameters){
         for (int i=0; i<SINGLE_BUFFER_SIZE; i++){
             d_notchedReferencePower += dp_notchedSignal[i]*dp_notchedSignal[i];
         }
-        Serial.print("Decision is: ");
-        Serial.println(b_vocalisation_detected);
+        b_vocalisation_detected = (d_notchedPower/d_notchedReferencePower >= THRESHOLD);
+
+        Serial.println(d_notchedPower/d_notchedReferencePower);
     
         // Saving to SD card
-        if (b_vocalisation_detected == 1){
+        // if (b_vocalisation_detected == 1){
+        if (b_vocalisation_detected = 1){
             if (i_mergeState == 0){
                 for(int i=0;i<(0.25*SINGLE_BUFFER_SIZE);i++) {
-                    voltage_value = (dp_filteredSignal[i] * 3.3)/4096;
-                    dataMessage += String(voltage_value, 16) + "\r\n";
+                    voltage_value = (dp_bufferSignal[i] * 3.3)/4096;
+                    dataMessage += String(voltage_value, 16) + " " + String(((dp_filteredSignal[i] * 3.3)/4096), 16) + "\r\n";
                 }
                 writeFile(SD, ("/"+s_FileName+".txt").c_str(), dataMessage.c_str());
                 dataMessage = "";
@@ -272,8 +272,8 @@ void Signal_Processing(void *parameters){
             }
             else{
                 for(int i=0;i<(0.25*SINGLE_BUFFER_SIZE);i++) {
-                    voltage_value = (dp_filteredSignal[i] * 3.3)/4096;
-                    dataMessage += String(voltage_value, 16) + "\r\n";
+                    voltage_value = (dp_bufferSignal[i] * 3.3)/4096;
+                    dataMessage += String(voltage_value, 16) + " " + String(((dp_filteredSignal[i] * 3.3)/4096), 16) + "\r\n";
                 }
                 appendFile(SD, ("/"+s_prevFileName+".txt").c_str(), dataMessage.c_str());
                 dataMessage = "";
